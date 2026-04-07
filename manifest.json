@@ -1,0 +1,22 @@
+{
+  "name": "Wardrobe by Bina",
+  "short_name": "Wardrobe",
+  "description": "Personal outfit assistant with weather and calendar integration",
+  "start_url": "/wardrobe/",
+  "display": "standalone",
+  "background_color": "#F7F4F0",
+  "theme_color": "#1C1C1C",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
