@@ -13,8 +13,7 @@ window.WARDROBE_CONFIG = {
 
   // From Google Cloud Console → Credentials → OAuth 2.0 Client ID
   // Looks like: 123456789-abcdefg.apps.googleusercontent.com
-  GOOGLE_CLIENT_ID: '699905325494-ms4iqbfslmm8t897om4s512g38889873.apps.googleusercontent.com
-',
+  GOOGLE_CLIENT_ID: '699905325494-ms4iqbfslmm8t897om4s512g38889873.apps.googleusercontent.com',
 
   // From your Wardrobe Catalog Google Sheet URL:
   // docs.google.com/spreadsheets/d/THIS_PART/edit
