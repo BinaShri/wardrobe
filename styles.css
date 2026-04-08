@@ -399,6 +399,10 @@ html, body {
   font-family: var(--font-body); font-size: 0.85rem; font-weight: 500;
   cursor: pointer;
 }
+.day-card.approved .day-approve-btn {
+  background: var(--white); color: #666;
+  border: 1.5px solid var(--border);
+}
 .day-approve-btn:active { opacity: 0.8; }
 .approve-all-bar {
   position: sticky; bottom: 0;

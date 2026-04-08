@@ -209,15 +209,43 @@ function loadArchiveFromSheet(){
       return {date:row[0]||'',topWid:row[1]||'',bottomWid:row[2]||'',shoesWid:row[3]||'',formality:parseInt(row[4])||3,weather:row[5]||'',notes:row[6]||''};});
   }).catch(function(e){console.warn('Archive:',e);});
 }
+// Ensure the Outfit Archive tab exists in the sheet (creates it if missing)
+var archiveTabReady = false;
+function ensureArchiveTab() {
+  if (archiveTabReady || state.isDemo || !state.accessToken) return Promise.resolve();
+  return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + CONFIG.SPREADSHEET_ID,
+    {headers:{Authorization:'Bearer '+state.accessToken}})
+  .then(function(r){return r.json();})
+  .then(function(d) {
+    var tabs = d.sheets ? d.sheets.map(function(s){return s.properties.title;}) : [];
+    if (tabs.indexOf(CONFIG.ARCHIVE_SHEET_NAME) >= 0) { archiveTabReady = true; return; }
+    // Create the tab and add headers
+    return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + CONFIG.SPREADSHEET_ID + ':batchUpdate', {
+      method: 'POST',
+      headers: {Authorization:'Bearer '+state.accessToken, 'Content-Type':'application/json'},
+      body: JSON.stringify({requests:[{addSheet:{properties:{title:CONFIG.ARCHIVE_SHEET_NAME}}}]})
+    }).then(function(){
+      // Add header row
+      return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + CONFIG.SPREADSHEET_ID + '/values/' + encodeURIComponent(CONFIG.ARCHIVE_SHEET_NAME + '!A1:G1') + '?valueInputOption=RAW', {
+        method: 'PUT',
+        headers: {Authorization:'Bearer '+state.accessToken, 'Content-Type':'application/json'},
+        body: JSON.stringify({values:[['Date','Top','Bottom','Shoes','Formality','Weather','Notes']]})
+      });
+    }).then(function(){ archiveTabReady = true; });
+  });
+}
+
 function saveOutfitToArchive(outfit,dateStr,formality){
   var entry={date:dateStr,topWid:outfit.top?outfit.top.wid:'',bottomWid:outfit.bottom?outfit.bottom.wid:'',
     shoesWid:outfit.shoes?outfit.shoes.wid:'',formality:formality,
     weather:state.weather?state.weather.temp+'\u00B0F '+state.weather.condition:'',notes:''};
   state.archive.push(entry);
   if(!state.isDemo&&state.accessToken){
-    fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+'/values/'+encodeURIComponent(CONFIG.ARCHIVE_SHEET_NAME+'!A:G')+':append?valueInputOption=RAW',
-      {method:'POST',headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
-       body:JSON.stringify({values:[[entry.date,entry.topWid,entry.bottomWid,entry.shoesWid,entry.formality,entry.weather,entry.notes]]})});
+    ensureArchiveTab().then(function(){
+      fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+'/values/'+encodeURIComponent(CONFIG.ARCHIVE_SHEET_NAME+'!A:G')+':append?valueInputOption=RAW',
+        {method:'POST',headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
+         body:JSON.stringify({values:[[entry.date,entry.topWid,entry.bottomWid,entry.shoesWid,entry.formality,entry.weather,entry.notes]]})});
+    });
   }
 }
 
@@ -253,7 +281,7 @@ function uploadToGooglePhotos(b64){
   var bin=atob(b64),bytes=new Uint8Array(bin.length);
   for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
 
-  // Step 1: get album, Step 2: upload bytes, Step 3: create media item
+  // Step 1: get album, Step 2: upload bytes, Step 3: create media item, Step 4: get baseUrl
   return getOrCreateAlbum().then(function(albumId) {
     return fetch('https://photoslibrary.googleapis.com/v1/uploads',{method:'POST',
       headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/octet-stream','X-Goog-Upload-Content-Type':'image/jpeg','X-Goog-Upload-Protocol':'raw'},body:bytes})
@@ -270,8 +298,19 @@ function uploadToGooglePhotos(b64){
       if(!d) return null;
       if(d.error){alert('Photo save failed: '+d.error.message);return null;}
       var r=d.newMediaItemResults&&d.newMediaItemResults[0];
-      if(r&&r.status&&r.status.message!=='Success'&&r.status.message!=='OK'){alert('Photo create failed: '+JSON.stringify(r.status));return null;}
-      return(r&&r.mediaItem&&r.mediaItem.baseUrl)||null;
+      if(!r||!r.mediaItem) return null;
+      // batchCreate doesn't return baseUrl with appendonly scope,
+      // so search the album to get it
+      return fetch('https://photoslibrary.googleapis.com/v1/mediaItems:search',{method:'POST',
+        headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
+        body:JSON.stringify({albumId:albumId,pageSize:1})})
+      .then(function(r){return r.json();})
+      .then(function(search){
+        if(search.mediaItems&&search.mediaItems[0]&&search.mediaItems[0].baseUrl){
+          return search.mediaItems[0].baseUrl;
+        }
+        return null;
+      });
     });
   }).catch(function(e){alert('Photo error: '+e.message);console.error('Photo:',e);return null;});
 }
@@ -401,7 +440,7 @@ function renderPlanScreen() {
         '<div class="day-outfit-full" id="dayOutfit_'+day.dateStr+'"></div>'+
         (plan.outfit&&hasIronNeeded(plan.outfit)?'<div class="iron-flag">\uD83D\uDD25 Iron needed</div>':'')+
         '<div class="commute-note day-commute-note" id="dayCommute_'+day.dateStr+'"></div>'+
-        '<button class="day-approve-btn" data-date="'+day.dateStr+'">'+(plan.approved?'Approved \u2713':'Approve outfit')+'</button></div>';
+        '<button class="day-approve-btn" data-date="'+day.dateStr+'">'+(plan.approved?'Approved \u2713 \u00A0tap to edit':'Approve outfit')+'</button></div>';
     card.addEventListener('click',function(e){
       if(e.target.closest('.formality-btn,.day-approve-btn,.swap-btn,.formality-picker'))return;
       card.classList.toggle('expanded');
@@ -416,7 +455,16 @@ function renderPlanScreen() {
   });
   cont.querySelectorAll('.day-approve-btn').forEach(function(btn){
     btn.addEventListener('click',function(e){e.stopPropagation();var ds=btn.dataset.date,p=state.planOutfits[ds];
-      if(!p.approved&&p.outfit){p.approved=true;saveOutfitToArchive(p.outfit,ds,p.formality);renderPlanScreen();}});
+      if(p.approved){
+        // Unapprove — let them edit
+        p.approved=false;
+        // Remove from in-memory archive (the sheet entry stays as a record)
+        state.archive=state.archive.filter(function(a){return a.date!==ds;});
+        renderPlanScreen();
+      } else if(p.outfit){
+        p.approved=true;saveOutfitToArchive(p.outfit,ds,p.formality);renderPlanScreen();
+      }
+    });
   });
 }
 function approveAllOutfits(){getWeekDays().forEach(function(d){var p=state.planOutfits[d.dateStr];if(p&&!p.approved&&p.outfit){p.approved=true;saveOutfitToArchive(p.outfit,d.dateStr,p.formality);}});renderPlanScreen();}
