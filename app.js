@@ -161,7 +161,7 @@ function loadWardrobeFromSheet() {
         type:row[5]||'Top',use:row[6]||'',season:row[7]||'Year-round',rating:parseRating(row[8]),
         ironNeeded:false,photoUrl:row[11]||'',emoji:getEmojiForType(row[5]||'Top')};
     }).filter(function(i){return i.wid;});
-    renderClosetGrid(); renderTodayScreen();
+    renderClosetGrid(); renderTodayScreen(); refreshPhotoUrls();
   }).catch(function(e){console.error('Sheet:',e);});
 }
 function findSheetRow(wid){
@@ -197,7 +197,7 @@ function updateItemInSheet(item){
        body:JSON.stringify({values:[[item.wid,item.name,item.brand,item.color,item.size,item.type,item.use,item.season,rs]]})});
     fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+'/values/'+encodeURIComponent(CONFIG.SHEET_NAME+'!L'+row)+'?valueInputOption=RAW',
       {method:'PUT',headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
-       body:JSON.stringify({values:[[item.photoUrl]]})});
+       body:JSON.stringify({values:[[item._sheetPhotoVal||item.photoUrl]]})});
   });
 }
 function loadArchiveFromSheet(){
@@ -281,7 +281,6 @@ function uploadToGooglePhotos(b64){
   var bin=atob(b64),bytes=new Uint8Array(bin.length);
   for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
 
-  // Step 1: get album, Step 2: upload bytes, Step 3: create media item, Step 4: get baseUrl
   return getOrCreateAlbum().then(function(albumId) {
     return fetch('https://photoslibrary.googleapis.com/v1/uploads',{method:'POST',
       headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/octet-stream','X-Goog-Upload-Content-Type':'image/jpeg','X-Goog-Upload-Protocol':'raw'},body:bytes})
@@ -299,20 +298,53 @@ function uploadToGooglePhotos(b64){
       if(d.error){alert('Photo save failed: '+d.error.message);return null;}
       var r=d.newMediaItemResults&&d.newMediaItemResults[0];
       if(!r||!r.mediaItem) return null;
-      // batchCreate doesn't return baseUrl with appendonly scope,
-      // so search the album to get it
+      // Save the media item ID prefixed with gphoto: so we can refresh the URL later
+      // Also grab the fresh baseUrl for immediate display
+      var mediaId = r.mediaItem.id;
       return fetch('https://photoslibrary.googleapis.com/v1/mediaItems:search',{method:'POST',
         headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
-        body:JSON.stringify({albumId:albumId,pageSize:1})})
+        body:JSON.stringify({albumId:albumId,pageSize:5})})
       .then(function(r){return r.json();})
       .then(function(search){
-        if(search.mediaItems&&search.mediaItems[0]&&search.mediaItems[0].baseUrl){
-          return search.mediaItems[0].baseUrl;
+        var freshUrl = null;
+        if(search.mediaItems){
+          for(var i=0;i<search.mediaItems.length;i++){
+            if(search.mediaItems[i].id===mediaId){freshUrl=search.mediaItems[i].baseUrl;break;}
+          }
         }
-        return null;
+        // Return both: the permanent ID for the sheet, and the fresh URL for display
+        return {sheetValue:'gphoto:'+mediaId, displayUrl:freshUrl};
       });
     });
   }).catch(function(e){alert('Photo error: '+e.message);console.error('Photo:',e);return null;});
+}
+
+// Refresh Google Photos URLs for all items that have gphoto: IDs.
+// Called after loading wardrobe from sheet. baseUrls expire after ~1 hour,
+// so we need fresh ones each session.
+function refreshPhotoUrls() {
+  if(state.isDemo||!state.accessToken) return;
+  var gphotos = state.wardrobe.filter(function(i){return i.photoUrl && i.photoUrl.indexOf('gphoto:')===0;});
+  if(!gphotos.length) return;
+  getOrCreateAlbum().then(function(albumId){
+    // Fetch all photos from the album
+    return fetch('https://photoslibrary.googleapis.com/v1/mediaItems:search',{method:'POST',
+      headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
+      body:JSON.stringify({albumId:albumId,pageSize:100})})
+    .then(function(r){return r.json();});
+  }).then(function(data){
+    if(!data.mediaItems) return;
+    // Build a map of mediaId -> baseUrl
+    var urlMap={};
+    data.mediaItems.forEach(function(m){urlMap[m.id]=m.baseUrl;});
+    // Update wardrobe items
+    var updated=false;
+    gphotos.forEach(function(item){
+      var mediaId=item.photoUrl.replace('gphoto:','');
+      if(urlMap[mediaId]){item.photoUrl=urlMap[mediaId];updated=true;}
+    });
+    if(updated) renderClosetGrid();
+  }).catch(function(e){console.warn('Photo refresh:',e);});
 }
 
 // === SECTION 10: Today screen ===
@@ -542,16 +574,18 @@ function saveNewItem(){
     ? uploadToGooglePhotos(addItemPhotoData)
     : Promise.resolve(null);
 
-  photoPromise.then(function(url) {
-    if (url) {
-      item.photoUrl = url;
+  photoPromise.then(function(result) {
+    var sheetPhotoVal = '';
+    if (result) {
+      item.photoUrl = result.displayUrl || '';
+      sheetPhotoVal = result.sheetValue || '';
       document.getElementById('addPhotoSaved').classList.add('visible');
     }
     state.wardrobe.push(item);
     if (!state.isDemo && state.accessToken) {
       var rs = rating ? rating + ' ' + '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating) : '';
       appendSheetRow([wid, name, item.brand, item.color, item.size, type, use, season, rs,
-        new Date().toLocaleDateString('en-US', {month:'short', year:'numeric'}), '', item.photoUrl]);
+        new Date().toLocaleDateString('en-US', {month:'short', year:'numeric'}), '', sheetPhotoVal]);
     }
     saveBtn.textContent='Save to wardrobe';saveBtn.disabled=false;
     closeAddItem(); renderClosetGrid();
@@ -598,8 +632,12 @@ function saveDetailChanges(){
     ? uploadToGooglePhotos(detailPhotoData)
     : Promise.resolve(null);
 
-  photoPromise.then(function(url) {
-    if (url) item.photoUrl = url;
+  photoPromise.then(function(result) {
+    if (result) {
+      item.photoUrl = result.displayUrl || '';
+      // Update sheet with the permanent gphoto: ID
+      item._sheetPhotoVal = result.sheetValue || '';
+    }
     updateItemInSheet(item);closeDetailPanel();renderClosetGrid();
   });
 }
