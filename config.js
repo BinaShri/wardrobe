@@ -8,7 +8,7 @@
 
 const CONFIG = {
   GOOGLE_CLIENT_ID: '699905325494-ms4iqbfslmm8t897om4s512g38889873.apps.googleusercontent.com',
-  SPREADSHEET_ID: '133TIbToMuyWCpFclRoA_ryjfuEPuR0Fr',
+  SPREADSHEET_ID: '1vH4CZPgdBaKtp-9V6ziev7cz0urCxEmyOQNG9K7ij6U',
   PHOTOS_ALBUM_ID: 'AF1QipMmaK_QDjnXTExuG2z-Gd4eknHiPNw6hNK5KQyx',
   SHEET_NAME: 'Wardrobe',
   ARCHIVE_SHEET_NAME: 'Outfit Archive',
