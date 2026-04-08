@@ -7,7 +7,7 @@
 // ============================================================
 
 const CONFIG = {
-  GOOGLE_CLIENT_ID: '340277578084-fqdr16h00e3qpkrscqk21sc8gk2c1qsb.apps.googleusercontent.com',
+  GOOGLE_CLIENT_ID: '699905325494-ms4iqbfslmm8t897om4s512g38889873.apps.googleusercontent.com',
   SPREADSHEET_ID: '133TIbToMuyWCpFclRoA_ryjfuEPuR0Fr',
   PHOTOS_ALBUM_ID: 'AF1QipMmaK_QDjnXTExuG2z-Gd4eknHiPNw6hNK5KQyx',
   SHEET_NAME: 'Wardrobe',
@@ -15,7 +15,6 @@ const CONFIG = {
   SCOPES: [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/photoslibrary.appendonly',
-    'https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata',
-    'https://www.googleapis.com/auth/calendar.readonly'
+    'https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata'
   ].join(' ')
 };
