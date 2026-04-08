@@ -222,29 +222,58 @@ function saveOutfitToArchive(outfit,dateStr,formality){
 }
 
 // === SECTION 9: Google Photos upload ===
+// Get or create an app-owned album (Google Photos API can only write
+// to albums the app itself created — not albums made in the Photos UI)
+var appAlbumId = null;
+function getOrCreateAlbum() {
+  if (appAlbumId) return Promise.resolve(appAlbumId);
+  // Check if we already have one
+  return fetch('https://photoslibrary.googleapis.com/v1/albums?pageSize=50',
+    {headers:{Authorization:'Bearer '+state.accessToken}})
+  .then(function(r){return r.json();})
+  .then(function(data) {
+    var albums = data.albums || [];
+    for (var i = 0; i < albums.length; i++) {
+      if (albums[i].title === 'Wardrobe') { appAlbumId = albums[i].id; return appAlbumId; }
+    }
+    // Not found — create it
+    return fetch('https://photoslibrary.googleapis.com/v1/albums', {
+      method: 'POST',
+      headers: {Authorization:'Bearer '+state.accessToken, 'Content-Type':'application/json'},
+      body: JSON.stringify({album:{title:'Wardrobe'}})
+    }).then(function(r){return r.json();}).then(function(a){
+      appAlbumId = a.id;
+      return appAlbumId;
+    });
+  });
+}
+
 function uploadToGooglePhotos(b64){
   if(state.isDemo||!state.accessToken) return Promise.resolve(null);
   var bin=atob(b64),bytes=new Uint8Array(bin.length);
   for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-  return fetch('https://photoslibrary.googleapis.com/v1/uploads',{method:'POST',
-    headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/octet-stream','X-Goog-Upload-Content-Type':'image/jpeg','X-Goog-Upload-Protocol':'raw'},body:bytes})
-  .then(function(r){
-    if(!r.ok) return r.text().then(function(t){alert('Photo upload step 1 failed: '+r.status+' '+t);return null;});
-    return r.text();
-  }).then(function(tok){
-    if(!tok) return null;
-    return fetch('https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate',{method:'POST',
-      headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
-      body:JSON.stringify({albumId:CONFIG.PHOTOS_ALBUM_ID,newMediaItems:[{simpleMediaItem:{uploadToken:tok,fileName:'wardrobe_'+Date.now()+'.jpg'}}]})})
-    .then(function(r){return r.json();});
-  }).then(function(d){
-    if(!d) return null;
-    if(d.error){alert('Photo upload step 2 failed: '+d.error.message);return null;}
-    var r=d.newMediaItemResults&&d.newMediaItemResults[0];
-    if(r&&r.status&&r.status.message!=='Success'&&r.status.message!=='OK'){alert('Photo create failed: '+JSON.stringify(r.status));return null;}
-    return(r&&r.mediaItem&&r.mediaItem.baseUrl)||null;
-  })
-  .catch(function(e){alert('Photo upload error: '+e.message);console.error('Photo:',e);return null;});
+
+  // Step 1: get album, Step 2: upload bytes, Step 3: create media item
+  return getOrCreateAlbum().then(function(albumId) {
+    return fetch('https://photoslibrary.googleapis.com/v1/uploads',{method:'POST',
+      headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/octet-stream','X-Goog-Upload-Content-Type':'image/jpeg','X-Goog-Upload-Protocol':'raw'},body:bytes})
+    .then(function(r){
+      if(!r.ok) return r.text().then(function(t){alert('Photo upload failed: '+r.status+' '+t);return null;});
+      return r.text();
+    }).then(function(tok){
+      if(!tok) return null;
+      return fetch('https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate',{method:'POST',
+        headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
+        body:JSON.stringify({albumId:albumId,newMediaItems:[{simpleMediaItem:{uploadToken:tok,fileName:'wardrobe_'+Date.now()+'.jpg'}}]})})
+      .then(function(r){return r.json();});
+    }).then(function(d){
+      if(!d) return null;
+      if(d.error){alert('Photo save failed: '+d.error.message);return null;}
+      var r=d.newMediaItemResults&&d.newMediaItemResults[0];
+      if(r&&r.status&&r.status.message!=='Success'&&r.status.message!=='OK'){alert('Photo create failed: '+JSON.stringify(r.status));return null;}
+      return(r&&r.mediaItem&&r.mediaItem.baseUrl)||null;
+    });
+  }).catch(function(e){alert('Photo error: '+e.message);console.error('Photo:',e);return null;});
 }
 
 // === SECTION 10: Today screen ===
