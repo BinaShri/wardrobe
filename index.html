@@ -188,8 +188,7 @@ body{font-family:'DM Sans',sans-serif;background:#F7F4F0;color:#1C1C1C;max-width
 .item-panel-close{width:28px;height:28px;border-radius:50%;background:#E5E0D8;border:none;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#666;font-family:'DM Sans',sans-serif}
 .item-panel-body{flex:1;overflow-y:auto;padding:0 16px 24px}
 .item-panel-photo{width:100%;height:180px;background:#EDE8E1;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:52px;overflow:hidden;margin-bottom:14px;position:relative}
-.item-panel-photo img{width:100%;height:100%;object-fit:cover}
-.item-panel-footer{padding:12px 16px max(20px,env(safe-area-inset-bottom));display:flex;gap:8px;flex-shrink:0;background:#F7F4F0;border-top:1px solid #E5E0D8}
+.item-panel-photo img{width:100%;height:100%;object-fit:cover}.item-panel-footer{padding:12px 16px max(20px,env(safe-area-inset-bottom));display:flex;gap:8px;flex-shrink:0;background:#F7F4F0;border-top:1px solid #E5E0D8}
 .del-item-btn{padding:12px 16px;background:#FDF0F0;color:#B85C5C;border:1px solid #F0CCC8;border-radius:11px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif}
 .save-item-btn2{flex:1;padding:12px;background:#1C1C1C;color:#F7F4F0;border:none;border-radius:11px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif}
 .saved-flash{font-size:11px;color:#4A7A4A;text-align:center;margin-top:4px;display:none}
@@ -343,7 +342,14 @@ body{font-family:'DM Sans',sans-serif;background:#F7F4F0;color:#1C1C1C;max-width
     <button class="item-panel-close" onclick="closePanel()">✕</button>
   </div>
   <div class="item-panel-body">
-    <div class="item-panel-photo" id="panel-photo"><span id="panel-emoji">👗</span></div>
+    <div class="item-panel-photo" id="panel-photo" style="cursor:pointer" onclick="trigPanelCam()">
+      <span id="panel-emoji">👗</span>
+      <div id="panel-photo-btn" style="position:absolute;bottom:8px;right:8px;background:rgba(28,28,28,0.7);color:white;border:none;border-radius:20px;padding:5px 11px;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;display:flex;align-items:center;gap:5px">📷 Change photo</div>
+    </div>
+    <input type="file" id="panel-cam-input" accept="image/*" capture="environment" style="display:none">
+    <div id="panel-photo-saving" style="background:#2D4A2D;padding:7px 14px;font-size:11px;color:#A8D8A8;display:none;align-items:center;gap:6px;border-radius:0;margin-bottom:8px">
+      <span>✓</span><span>Photo saved to Google Photos</span>
+    </div>
     <div class="fc">
       <div class="frow"><div class="fl">Name</div><input class="fi" id="p-name" type="text" placeholder="Item name"></div>
       <div class="frow"><div class="fl">Brand</div><input class="fi" id="p-brand" type="text" placeholder="Brand"></div>
@@ -402,22 +408,22 @@ const SHN=CFG.SHEET_NAME||'Wardrobe';
 const SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/photoslibrary.appendonly https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata';
 let S={auth:null,tok:null,vibe:'work',form:{0:3,1:2,2:3,3:3,4:2},expDay:null,filt:'all',srt:'added',fr:0,pu:null,items:[]};
 const DEMO=[
-  {id:1,name:'Scoop Neck Elbow Sleeve Tee',brand:'Ann Taylor',color:'Black',size:'S',type:'Top',use:'Work, Casual',season:'Year-round',rating:4,photoUrl:'https://anninc.scene7.com/is/image/AN/836938_2222?$pdpMainImage$',emoji:'👚'},
-  {id:2,name:'Scoop Neck Elbow Sleeve Tee',brand:'Ann Taylor',color:'Winter White',size:'S',type:'Top',use:'Work, Casual',season:'Year-round',rating:4,photoUrl:'https://anninc.scene7.com/is/image/AN/836938_9192?$pdpMainImage$',emoji:'🤍'},
-  {id:3,name:'Scoop Neck Elbow Sleeve Tee',brand:'Ann Taylor',color:'Night Sky',size:'S',type:'Top',use:'Work, Casual',season:'Year-round',rating:4,photoUrl:'https://anninc.scene7.com/is/image/AN/836938_1362?$pdpMainImage$',emoji:'🌙'},
-  {id:4,name:'Petite Trouser Seasonless',brand:'Ann Taylor',color:'Deep Navy',size:'8P',type:'Bottom',use:'Work',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/831533_1934?$pdpMainImage$',emoji:'👖'},
-  {id:5,name:'Petite Notched Blazer',brand:'Ann Taylor',color:'Deep Navy',size:'6P',type:'Outerwear',use:'Work, Formal',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/613313_1934?$pdpMainImage$',emoji:'🧥'},
-  {id:6,name:'Petite Collarless Blazer',brand:'Ann Taylor',color:'Deep Navy',size:'6P',type:'Outerwear',use:'Work, Formal',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/842985_1934?$pdpMainImage$',emoji:'🧥'},
-  {id:7,name:'Side Zip Trouser Fluid Crepe',brand:'Ann Taylor',color:'Ivory Whisper',size:'8P',type:'Bottom',use:'Work, Formal',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/612729_9007?$pdpMainImage$',emoji:'👖'},
-  {id:8,name:'Long Collarless Blazer',brand:'Ann Taylor',color:'Black',size:'6P',type:'Outerwear',use:'Work, Formal',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/611127_2222_MKTG1?$pdpMainImage$',emoji:'🖤'},
-  {id:9,name:'Side Zip Ankle Pant',brand:'Ann Taylor',color:'Black',size:'8P',type:'Bottom',use:'Work',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/612732_2222?$pdpMainImage$',emoji:'👖'},
-  {id:10,name:'Classic White Tee',brand:'Mott & Bow',color:'White',size:'',type:'Top',use:'Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'🤍'},
-  {id:11,name:'Stretch Twill Wide Leg Pant',brand:'Spanx',color:'Sandbar',size:'Petite M',type:'Bottom',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'👖'},
-  {id:12,name:'Juliet Mia Loafer',brand:'Clarks',color:'Tan',size:'8',type:'Shoes',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'👟'},
-  {id:13,name:'Vienna Loafer',brand:'ECCO',color:'Black',size:'8-8.5',type:'Shoes',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'👞'},
-  {id:14,name:'Larisa Clog',brand:'Dansko',color:'Black',size:'EU 38',type:'Shoes',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'🪵'},
-  {id:15,name:'Reagan Flat',brand:'Trotters',color:'Black',size:'8W',type:'Shoes',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'🖤'},
-  {id:16,name:'Aldaya Loafer',brand:'Pikolinos',color:'Black',size:'7.5-8',type:'Shoes',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'✨'},
+  {wid:'w_1700000000001',name:'Scoop Neck Elbow Sleeve Tee',brand:'Ann Taylor',color:'Black',size:'S',type:'Top',use:'Work, Casual',season:'Year-round',rating:4,photoUrl:'https://anninc.scene7.com/is/image/AN/836938_2222?$pdpMainImage$',emoji:'👚'},
+  {wid:'w_1700000000002',name:'Scoop Neck Elbow Sleeve Tee',brand:'Ann Taylor',color:'Winter White',size:'S',type:'Top',use:'Work, Casual',season:'Year-round',rating:4,photoUrl:'https://anninc.scene7.com/is/image/AN/836938_9192?$pdpMainImage$',emoji:'🤍'},
+  {wid:'w_1700000000003',name:'Scoop Neck Elbow Sleeve Tee',brand:'Ann Taylor',color:'Night Sky',size:'S',type:'Top',use:'Work, Casual',season:'Year-round',rating:4,photoUrl:'https://anninc.scene7.com/is/image/AN/836938_1362?$pdpMainImage$',emoji:'🌙'},
+  {wid:'w_1700000000004',name:'Petite Trouser Seasonless',brand:'Ann Taylor',color:'Deep Navy',size:'8P',type:'Bottom',use:'Work',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/831533_1934?$pdpMainImage$',emoji:'👖'},
+  {wid:'w_1700000000005',name:'Petite Notched Blazer',brand:'Ann Taylor',color:'Deep Navy',size:'6P',type:'Outerwear',use:'Work, Formal',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/613313_1934?$pdpMainImage$',emoji:'🧥'},
+  {wid:'w_1700000000006',name:'Petite Collarless Blazer',brand:'Ann Taylor',color:'Deep Navy',size:'6P',type:'Outerwear',use:'Work, Formal',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/842985_1934?$pdpMainImage$',emoji:'🧥'},
+  {wid:'w_1700000000007',name:'Side Zip Trouser Fluid Crepe',brand:'Ann Taylor',color:'Ivory Whisper',size:'8P',type:'Bottom',use:'Work, Formal',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/612729_9007?$pdpMainImage$',emoji:'👖'},
+  {wid:'w_1700000000008',name:'Long Collarless Blazer',brand:'Ann Taylor',color:'Black',size:'6P',type:'Outerwear',use:'Work, Formal',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/611127_2222_MKTG1?$pdpMainImage$',emoji:'🖤'},
+  {wid:'w_1700000000009',name:'Side Zip Ankle Pant',brand:'Ann Taylor',color:'Black',size:'8P',type:'Bottom',use:'Work',season:'Year-round',rating:0,photoUrl:'https://anninc.scene7.com/is/image/AN/612732_2222?$pdpMainImage$',emoji:'👖'},
+  {wid:'w_1700000000010',name:'Classic White Tee',brand:'Mott & Bow',color:'White',size:'',type:'Top',use:'Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'🤍'},
+  {wid:'w_1700000000011',name:'Stretch Twill Wide Leg Pant',brand:'Spanx',color:'Sandbar',size:'Petite M',type:'Bottom',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'👖'},
+  {wid:'w_1700000000012',name:'Juliet Mia Loafer',brand:'Clarks',color:'Tan',size:'8',type:'Shoes',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'👟'},
+  {wid:'w_1700000000013',name:'Vienna Loafer',brand:'ECCO',color:'Black',size:'8-8.5',type:'Shoes',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'👞'},
+  {wid:'w_1700000000014',name:'Larisa Clog',brand:'Dansko',color:'Black',size:'EU 38',type:'Shoes',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'🪵'},
+  {wid:'w_1700000000015',name:'Reagan Flat',brand:'Trotters',color:'Black',size:'8W',type:'Shoes',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'🖤'},
+  {wid:'w_1700000000016',name:'Aldaya Loafer',brand:'Pikolinos',color:'Black',size:'7.5-8',type:'Shoes',use:'Work, Casual',season:'Year-round',rating:0,photoUrl:'',emoji:'✨'},
 ];
 const OF={
   work:{t:'Polished & comfortable',b:'Work',o:'<strong>Light jacket needed</strong> — 58°, walk to BART',i:[{c:'Top',n:'Scoop Neck Elbow Tee',d:'Ann Taylor · Black',p:'https://anninc.scene7.com/is/image/AN/836938_2222?$pdpMainImage$',e:'👚'},{c:'Bottom',n:'Stretch Twill Wide Leg Pant',d:'Spanx · Sandbar',p:'',e:'👖'},{c:'Shoes',n:'Vienna Loafer',d:'ECCO · Black',p:'',e:'👞'}]},
@@ -427,14 +433,82 @@ const OF={
 };
 const WK=[{name:'Monday',ev:[],rain:false,temp:58},{name:'Tuesday',ev:['Surya karate'],rain:true,temp:55},{name:'Wednesday',ev:[],rain:false,temp:62},{name:'Thursday',ev:['Surya karate'],rain:false,temp:57},{name:'Friday',ev:[],rain:false,temp:60}];
 const FL=['','WFH','Internal','Office','Client','Formal'];
-window.addEventListener('load',()=>{S.items=[...DEMO];setWD();document.getElementById('cinput').addEventListener('change',hph);});
+window.addEventListener('load',()=>{S.items=[...DEMO];setWD();document.getElementById('cinput').addEventListener('change',hph);document.getElementById('panel-cam-input').addEventListener('change',handlePanelPhoto);});
 function setWD(){const n=new Date();const m=new Date(n);m.setDate(n.getDate()-(n.getDay()||7)+1);WK.forEach((d,i)=>{const dt=new Date(m);dt.setDate(m.getDate()+i);d.date=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});});const fr=new Date(m);fr.setDate(m.getDate()+4);document.getElementById('pwl').textContent=`Weekly planning · ${m.toLocaleDateString('en-US',{month:'short',day:'numeric'})}–${fr.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;}
 function handleSignIn(){if(!CFGD){alert('Fill in config.js first — see README.\n\nContinuing in demo mode.');skipAuth();return;}google.accounts.oauth2.initTokenClient({client_id:CFG.GOOGLE_CLIENT_ID,scope:SCOPES,callback:r=>{if(r.access_token){S.tok=r.access_token;S.auth='google';boot();}}}).requestAccessToken();}
 function skipAuth(){S.auth='demo';boot();}
 function boot(){if(S.auth==='google')loadSheet();else document.getElementById('demob').style.display='block';fetchW();updDate();renderOF('work');go('today');}
-async function loadSheet(){if(!S.tok||!CFG.SPREADSHEET_ID||CFG.SPREADSHEET_ID==='YOUR_SPREADSHEET_ID_HERE')return;try{const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.SPREADSHEET_ID}/values/${SHN}!A2:K500`,{headers:{Authorization:`Bearer ${S.tok}`}});const d=await r.json();if(d.values?.length){S.items=d.values.map((row,i)=>({id:i+1,name:row[0]||'',brand:row[1]||'',color:row[2]||'',size:row[3]||'',type:row[4]||'Other',use:row[5]||'',season:row[6]||'Year-round',rating:parseInt((row[7]||'0').replace(/\D/g,''))||0,photoUrl:row[10]||'',emoji:em(row[4])}));renderC();updCH();}}catch(e){console.warn(e);}}
-async function appendRow(item){if(!S.tok||!CFG.SPREADSHEET_ID||CFG.SPREADSHEET_ID==='YOUR_SPREADSHEET_ID_HERE')return;const stars=item.rating?`${item.rating} ${'★'.repeat(item.rating)}${'☆'.repeat(5-item.rating)}`:'';const date=new Date().toLocaleDateString('en-US',{month:'short',year:'numeric'});try{await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.SPREADSHEET_ID}/values/${SHN}!A:K:append?valueInputOption=USER_ENTERED`,{method:'POST',headers:{Authorization:`Bearer ${S.tok}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[item.name,item.brand,item.color,item.size,item.type,item.use,item.season,stars,date,'',item.photoUrl||'']]})});}catch(e){console.warn(e);}}
-async function updRating(item){if(!S.tok||!CFG.SPREADSHEET_ID||CFG.SPREADSHEET_ID==='YOUR_SPREADSHEET_ID_HERE')return;const stars=item.rating?`${item.rating} ${'★'.repeat(item.rating)}${'☆'.repeat(5-item.rating)}`:'';try{await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.SPREADSHEET_ID}/values/${SHN}!H${item.id+1}?valueInputOption=USER_ENTERED`,{method:'PUT',headers:{Authorization:`Bearer ${S.tok}`,'Content-Type':'application/json'},body:JSON.stringify({values:[[stars]]})});}catch(e){console.warn(e);}}
+/* ══ Sheet helpers — all keyed by wardrobeId in column A ══ */
+function mkId(){return'w_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);}
+function starsStr(r){return r?`${r} ${'★'.repeat(r)}${'☆'.repeat(5-r)}`:''}
+
+async function sheetGet(range){
+  if(!S.tok||!CFG.SPREADSHEET_ID||CFG.SPREADSHEET_ID==='YOUR_SPREADSHEET_ID_HERE')return null;
+  try{const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.SPREADSHEET_ID}/values/${SHN}!${range}`,{headers:{Authorization:`Bearer ${S.tok}`}});return await r.json();}catch(e){console.warn(e);return null;}
+}
+async function sheetPut(range,values){
+  if(!S.tok||!CFG.SPREADSHEET_ID||CFG.SPREADSHEET_ID==='YOUR_SPREADSHEET_ID_HERE')return;
+  try{await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.SPREADSHEET_ID}/values/${SHN}!${range}?valueInputOption=USER_ENTERED`,{method:'PUT',headers:{Authorization:`Bearer ${S.tok}`,'Content-Type':'application/json'},body:JSON.stringify({values})});}catch(e){console.warn(e);}
+}
+async function sheetAppend(values){
+  if(!S.tok||!CFG.SPREADSHEET_ID||CFG.SPREADSHEET_ID==='YOUR_SPREADSHEET_ID_HERE')return;
+  try{await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.SPREADSHEET_ID}/values/${SHN}!A:L:append?valueInputOption=USER_ENTERED`,{method:'POST',headers:{Authorization:`Bearer ${S.tok}`,'Content-Type':'application/json'},body:JSON.stringify({values})});}catch(e){console.warn(e);}
+}
+async function sheetDeleteRow(rowIndex){
+  /* rowIndex is 0-based sheet row index (0=row1 header, 1=first data row) */
+  if(!S.tok||!CFG.SPREADSHEET_ID||CFG.SPREADSHEET_ID==='YOUR_SPREADSHEET_ID_HERE')return;
+  try{
+    /* Need spreadsheet numeric sheetId first */
+    const meta=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.SPREADSHEET_ID}`,{headers:{Authorization:`Bearer ${S.tok}`}});
+    const md=await meta.json();
+    const sheet=md.sheets?.find(s=>s.properties.title===SHN);
+    const sheetId=sheet?.properties?.sheetId??0;
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.SPREADSHEET_ID}:batchUpdate`,{
+      method:'POST',headers:{Authorization:`Bearer ${S.tok}`,'Content-Type':'application/json'},
+      body:JSON.stringify({requests:[{deleteDimension:{range:{sheetId,dimension:'ROWS',startIndex:rowIndex,endIndex:rowIndex+1}}}]})
+    });
+  }catch(e){console.warn(e);}
+}
+async function findRowByWardrobeId(wid){
+  /* Returns 1-based row number, or null if not found */
+  const d=await sheetGet('A:A');
+  if(!d?.values)return null;
+  const idx=d.values.findIndex(r=>r[0]===wid);
+  return idx>=0?idx+1:null;
+}
+
+async function loadSheet(){
+  if(!S.tok||!CFG.SPREADSHEET_ID||CFG.SPREADSHEET_ID==='YOUR_SPREADSHEET_ID_HERE')return;
+  const d=await sheetGet('A2:L500');
+  if(!d?.values?.length)return;
+  S.items=d.values
+    .filter(row=>row[0]&&row[1]) /* skip rows without ID or name */
+    .map(row=>({
+      wid:row[0],
+      name:row[1]||'',brand:row[2]||'',color:row[3]||'',size:row[4]||'',
+      type:row[5]||'Other',use:row[6]||'',season:row[7]||'Year-round',
+      rating:parseInt((row[8]||'0').replace(/\D/g,''))||0,
+      photoUrl:row[11]||'',emoji:em(row[5])
+    }));
+  renderC();updCH();
+}
+
+async function appendRow(item){
+  const date=new Date().toLocaleDateString('en-US',{month:'short',year:'numeric'});
+  await sheetAppend([[item.wid,item.name,item.brand,item.color,item.size,item.type,item.use,item.season,starsStr(item.rating),date,'',item.photoUrl||'']]);
+}
+
+async function updateRow(item){
+  const row=await findRowByWardrobeId(item.wid);
+  if(!row)return;
+  await sheetPut(`A${row}:L${row}`,[[item.wid,item.name,item.brand,item.color,item.size,item.type,item.use,item.season,starsStr(item.rating),'','',item.photoUrl||'']]);
+}
+
+async function deleteRow(item){
+  const row=await findRowByWardrobeId(item.wid);
+  if(!row)return;
+  await sheetDeleteRow(row-1); /* convert to 0-based */
+}
 async function uploadP(b64,mime,name){if(!S.tok)return null;try{const up=await fetch('https://photoslibrary.googleapis.com/v1/uploads',{method:'POST',headers:{Authorization:`Bearer ${S.tok}`,'Content-Type':'application/octet-stream','X-Goog-Upload-File-Name':`wardrobe-${Date.now()}.jpg`,'X-Goog-Upload-Protocol':'raw'},body:Uint8Array.from(atob(b64),c=>c.charCodeAt(0))});const tok=await up.text();const body={newMediaItems:[{description:name,simpleMediaItem:{uploadToken:tok}}]};if(CFG.PHOTOS_ALBUM_ID)body.albumId=CFG.PHOTOS_ALBUM_ID;const cr=await fetch('https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate',{method:'POST',headers:{Authorization:`Bearer ${S.tok}`,'Content-Type':'application/json'},body:JSON.stringify(body)});const cd=await cr.json();return cd?.newMediaItemResults?.[0]?.mediaItem?.baseUrl||null;}catch(e){console.warn(e);return null;}}
 async function fetchW(){try{const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.7749&longitude=-122.4194&current_weather=true&temperature_unit=fahrenheit');const d=await r.json();if(d.current_weather){const t=Math.round(d.current_weather.temperature);const rain=[51,53,55,61,63,65,80,81,82].includes(d.current_weather.weathercode);document.getElementById('wt').textContent=`${t}°`;document.getElementById('wi').textContent=rain?'🌧':t>65?'☀':'☁';}}catch(e){}}
 function go(name){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(`screen-${name}`).classList.add('active');if(name==='closet'){renderC();updCH();}if(name==='plan')renderP();if(name==='today')renderOF(S.vibe);}
@@ -452,39 +526,62 @@ function em(t){return({Top:'👚',Bottom:'👖',Outerwear:'🧥',Shoes:'👟',Ac
 function fc(f,btn){S.filt=f;document.querySelectorAll('.fp').forEach(p=>p.classList.remove('a'));btn.classList.add('a');renderC();}
 function sc2(v){S.srt=v;renderC();}
 function gfi(){let items=[...S.items];if(S.filt==='low')items=items.filter(i=>i.rating>0&&i.rating<=2);else if(S.filt!=='all')items=items.filter(i=>i.type===S.filt);if(S.srt==='rating-high')items.sort((a,b)=>b.rating-a.rating);else if(S.srt==='rating-low')items.sort((a,b)=>a.rating-b.rating);else if(S.srt==='brand')items.sort((a,b)=>a.brand.localeCompare(b.brand));return items;}
-function setR(id,val){const item=S.items.find(i=>i.id===id);if(!item)return;item.rating=item.rating===val?0:val;if(S.auth==='google')updateRow(item);renderC();}
-function renderC(){const items=gfi();document.getElementById('scount').textContent=`${items.length} item${items.length!==1?'s':''}`;document.getElementById('cgrid').innerHTML=items.map(item=>{const r=item.rating||0;const low=r>0&&r<=2;const stars=[1,2,3,4,5].map(s=>`<span class="st ${s<=r?'on':'off'}" onclick="setR(${item.id},${s});event.stopPropagation()">★</span>`).join('');return `<div class="ic ${low?'lr':''}" onclick="openPanel(${item.id})"><div class="icp">${item.photoUrl?`<img src="${item.photoUrl}" loading="lazy" onerror="this.parentElement.innerHTML='<span style=\\'font-size:32px\\'>${item.emoji}</span>'">`:`<span>${item.emoji}</span>`}${!r?'<div class="unr">Rate me</div>':''}</div><div class="ici"><div class="ict">${item.type} · ${item.color}</div><div class="icn">${item.name}</div><div class="icb">${item.brand}</div><div class="str">${stars}</div>${low?'<div class="df">donate candidate</div>':''}</div></div>`;}).join('')+`<div class="aic" onclick="openAdd()"><div class="ap">+</div><div class="ail">Add item</div></div>`;}
+function setR(wid,val){const item=S.items.find(i=>i.wid===wid);if(!item)return;item.rating=item.rating===val?0:val;if(S.auth==='google')updateRow(item);renderC();}
+function renderC(){const items=gfi();document.getElementById('scount').textContent=`${items.length} item${items.length!==1?'s':''}`;document.getElementById('cgrid').innerHTML=items.map(item=>{const r=item.rating||0;const low=r>0&&r<=2;const wid=item.wid;const stars=[1,2,3,4,5].map(s=>`<span class="st ${s<=r?'on':'off'}" onclick="setR('${wid}',${s});event.stopPropagation()">★</span>`).join('');return `<div class="ic ${low?'lr':''}" onclick="openPanel('${wid}')"><div class="icp">${item.photoUrl?`<img src="${item.photoUrl}" loading="lazy" onerror="this.parentElement.innerHTML='<span style=\\'font-size:32px\\'>${item.emoji}</span>'">`:`<span>${item.emoji}</span>`}${!r?'<div class="unr">Rate me</div>':''}</div><div class="ici"><div class="ict">${item.type} · ${item.color}</div><div class="icn">${item.name}</div><div class="icb">${item.brand}</div><div class="str">${stars}</div>${low?'<div class="df">donate candidate</div>':''}</div></div>`;}).join('')+`<div class="aic" onclick="openAdd()"><div class="ap">+</div><div class="ail">Add item</div></div>`;}
 
 /* ── Item detail panel ── */
-let panelId=null,panelRating=0;
-function openPanel(id){
-  const item=S.items.find(i=>i.id===id);if(!item)return;
-  panelId=id;panelRating=item.rating||0;
+let panelWid=null,panelRating=0;
+function openPanel(wid){
+  const item=S.items.find(i=>i.wid===wid);if(!item)return;
+  panelWid=wid;panelRating=item.rating||0;
   document.getElementById('panel-title').textContent=item.name;
   document.getElementById('p-name').value=item.name;
   document.getElementById('p-brand').value=item.brand;
   document.getElementById('p-color').value=item.color;
   document.getElementById('p-size').value=item.size;
-  // photo
   const ph=document.getElementById('panel-photo');
-  if(item.photoUrl){ph.innerHTML=`<img src="${item.photoUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<span style=\\'font-size:52px\\'>${item.emoji}</span>'">`;}
-  else{ph.innerHTML=`<span style="font-size:52px">${item.emoji}</span>`;}
-  // chips
+  const camBtn=`<div id="panel-photo-btn" style="position:absolute;bottom:8px;right:8px;background:rgba(28,28,28,0.7);color:white;border-radius:20px;padding:5px 11px;font-size:11px;font-family:'DM Sans',sans-serif;pointer-events:none;display:flex;align-items:center;gap:5px">📷 Change photo</div>`;
+  if(item.photoUrl){ph.innerHTML=`<img src="${item.photoUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.innerHTML='<span style=\\'font-size:52px\\'>${item.emoji}</span>'+\`${camBtn}\`">${camBtn}`;}
+  else{ph.innerHTML=`<span style="font-size:52px">${item.emoji}</span>${camBtn}`;}
+  document.getElementById('panel-photo-saving').style.display='none';
   ['p-type','p-use','p-season'].forEach(id2=>document.querySelectorAll(`#${id2} .chip`).forEach(c=>c.classList.remove('on')));
   document.querySelectorAll('#p-type .chip').forEach(c=>{if(item.type===c.textContent)c.classList.add('on');});
   item.use.split(',').map(u=>u.trim()).forEach(u=>{document.querySelectorAll('#p-use .chip').forEach(c=>{if(c.textContent===u)c.classList.add('on');});});
   document.querySelectorAll('#p-season .chip').forEach(c=>{if(item.season===c.textContent)c.classList.add('on');});
-  // stars
   psr(0,true);psr(panelRating,true);
   document.getElementById('saved-flash').style.display='none';
   document.getElementById('item-backdrop').classList.add('active');
-  document.getElementById('item-panel').style.display='flex';
-  document.getElementById('item-panel').style.flexDirection='column';
+  document.getElementById('item-panel').style.cssText='display:flex;flex-direction:column';
 }
 function closePanel(){
   document.getElementById('item-backdrop').classList.remove('active');
   document.getElementById('item-panel').style.display='none';
-  panelId=null;
+  panelWid=null;
+}
+function trigPanelCam(){document.getElementById('panel-cam-input').click();}
+async function handlePanelPhoto(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async ev=>{
+    const du=ev.target.result;
+    const camBtn=`<div style="position:absolute;bottom:8px;right:8px;background:rgba(28,28,28,0.7);color:white;border-radius:20px;padding:5px 11px;font-size:11px;font-family:'DM Sans',sans-serif;pointer-events:none;display:flex;align-items:center;gap:5px">📷 Change photo</div>`;
+    document.getElementById('panel-photo').innerHTML=`<img src="${du}" style="width:100%;height:100%;object-fit:cover">${camBtn}`;
+    let photoUrl=du;
+    if(S.auth==='google'){
+      const name=document.getElementById('p-name').value||'Wardrobe item';
+      const url=await uploadP(du.split(',')[1],file.type,name);
+      if(url){
+        photoUrl=url;
+        const bar=document.getElementById('panel-photo-saving');
+        bar.style.display='flex';
+        setTimeout(()=>bar.style.display='none',3000);
+      }
+    }
+    const item=S.items.find(i=>i.wid===panelWid);
+    if(item)item.photoUrl=photoUrl;
+    e.target.value='';
+  };
+  reader.readAsDataURL(file);
 }
 function ptc(el,group){
   if(group==='t'||group==='s'){el.closest('.cr').querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));}
@@ -496,7 +593,7 @@ function psr(val,force){
   document.querySelectorAll('#p-stars .fstar').forEach((s,i)=>s.className=`fstar ${i<panelRating?'on':'off'}`);
 }
 async function savePanel(){
-  const item=S.items.find(i=>i.id===panelId);if(!item)return;
+  const item=S.items.find(i=>i.wid===panelWid);if(!item)return;
   const chips=id2=>[...document.querySelectorAll(`#${id2} .chip.on`)].map(c=>c.textContent).join(', ');
   item.name=document.getElementById('p-name').value.trim()||item.name;
   item.brand=document.getElementById('p-brand').value.trim();
@@ -514,20 +611,12 @@ async function savePanel(){
   flash.style.display='block';
   setTimeout(()=>flash.style.display='none',2500);
 }
-function delFromPanel(){
-  const item=S.items.find(i=>i.id===panelId);if(!item)return;
-  if(!confirm(`Remove "${item.name}" from your wardrobe?\n\nYou'll also need to delete the row from your Google Sheet.`))return;
-  S.items=S.items.filter(i=>i.id!==panelId);
+async function delFromPanel(){
+  const item=S.items.find(i=>i.wid===panelWid);if(!item)return;
+  if(!confirm(`Remove "${item.name}" from your wardrobe?`))return;
+  if(S.auth==='google')await deleteRow(item);
+  S.items=S.items.filter(i=>i.wid!==panelWid);
   closePanel();renderC();updCH();
-}
-async function updateRow(item){
-  if(!S.tok||!CFG.SPREADSHEET_ID||CFG.SPREADSHEET_ID==='YOUR_SPREADSHEET_ID_HERE')return;
-  const stars=item.rating?`${item.rating} ${'★'.repeat(item.rating)}${'☆'.repeat(5-item.rating)}`:'';
-  const values=[[item.name,item.brand,item.color,item.size,item.type,item.use,item.season,stars,'','',item.photoUrl||'']];
-  try{
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${CFG.SPREADSHEET_ID}/values/${SHN}!A${item.id+1}:K${item.id+1}?valueInputOption=USER_ENTERED`,
-      {method:'PUT',headers:{Authorization:`Bearer ${S.tok}`,'Content-Type':'application/json'},body:JSON.stringify({values})});
-  }catch(e){console.warn(e);}
 }
 function updCH(){document.getElementById('ccount').innerHTML=`${S.items.length} items · <em>rate & sort</em>`;}
 function openAdd(){document.getElementById('screen-add').classList.add('active');document.getElementById('anote').style.display=S.auth!=='google'?'block':'none';}
@@ -536,7 +625,7 @@ function trigCam(){document.getElementById('cinput').click();}
 async function hph(e){const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=async ev=>{const du=ev.target.result;const p=document.getElementById('cprev');p.src=du;p.style.display='block';document.getElementById('chint').style.display='none';if(S.auth==='google'){const url=await uploadP(du.split(',')[1],file.type,document.getElementById('fn').value||'Wardrobe item');S.pu=url||du;if(url)document.getElementById('psb').style.display='flex';}else{S.pu=du;}};reader.readAsDataURL(file);}
 function tc(el,group){if(group==='t'||group==='s'){el.closest('.cr').querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));}el.classList.toggle('on');}
 function sfr(val){S.fr=S.fr===val?0:val;document.querySelectorAll('.fstar').forEach((s,i)=>s.className=`fstar ${i<S.fr?'on':'off'}`);}
-async function saveItem(){const name=document.getElementById('fn').value.trim();if(!name){alert('Please enter an item name.');return;}const chips=id=>[...document.querySelectorAll(`#${id} .chip.on`)].map(c=>c.textContent).join(', ');const item={id:Date.now(),name,brand:document.getElementById('fbr').value.trim(),color:document.getElementById('fcol').value.trim(),size:document.getElementById('fsz').value.trim(),type:chips('ctype')||'Other',use:chips('cuse'),season:chips('cseas')||'Year-round',rating:S.fr,photoUrl:S.pu||'',emoji:em(chips('ctype'))};S.items.unshift(item);if(S.auth==='google')await appendRow(item);closeAdd();go('closet');updCH();}
+async function saveItem(){const name=document.getElementById('fn').value.trim();if(!name){alert('Please enter an item name.');return;}const chips=id=>[...document.querySelectorAll(`#${id} .chip.on`)].map(c=>c.textContent).join(', ');const item={wid:mkId(),name,brand:document.getElementById('fbr').value.trim(),color:document.getElementById('fcol').value.trim(),size:document.getElementById('fsz').value.trim(),type:chips('ctype')||'Other',use:chips('cuse'),season:chips('cseas')||'Year-round',rating:S.fr,photoUrl:S.pu||'',emoji:em(chips('ctype'))};S.items.unshift(item);if(S.auth==='google')await appendRow(item);closeAdd();go('closet');updCH();}
 function resetF(){['fn','fbr','fcol','fsz'].forEach(id=>document.getElementById(id).value='');document.querySelectorAll('.chip.on').forEach(c=>c.classList.remove('on'));document.querySelector('#cseas .chip').classList.add('on');S.fr=0;S.pu=null;document.querySelectorAll('.fstar').forEach(s=>s.className='fstar off');const p=document.getElementById('cprev');p.src='';p.style.display='none';document.getElementById('chint').style.display='flex';document.getElementById('psb').style.display='none';document.getElementById('cinput').value='';}
 function pack(){const d=prompt('Where are you going?');const n=prompt('How many days?');if(d&&n)alert(`Packing list for ${n} days in ${d} — coming in the next update!`);}
 </script>
