@@ -533,6 +533,10 @@ function saveNewItem(){
     color:document.getElementById('addColor').value.trim(),size:document.getElementById('addSize').value.trim(),
     type:type,use:use,season:season,rating:rating,ironNeeded:iron,photoUrl:'',emoji:getEmojiForType(type)};
 
+  // Show saving state
+  var saveBtn=document.getElementById('addSave');
+  saveBtn.textContent='Saving...';saveBtn.disabled=true;
+
   // Upload photo to Google Photos if one was taken, then save to sheet
   var photoPromise = (addItemPhotoData && !state.isDemo && state.accessToken)
     ? uploadToGooglePhotos(addItemPhotoData)
@@ -549,6 +553,7 @@ function saveNewItem(){
       appendSheetRow([wid, name, item.brand, item.color, item.size, type, use, season, rs,
         new Date().toLocaleDateString('en-US', {month:'short', year:'numeric'}), '', item.photoUrl]);
     }
+    saveBtn.textContent='Save to wardrobe';saveBtn.disabled=false;
     closeAddItem(); renderClosetGrid();
   });
 }
@@ -646,7 +651,7 @@ function setStarRating(cid,r){document.getElementById(cid).querySelectorAll('.st
 function resetStarRating(cid){setStarRating(cid,0);}
 
 // === SECTION 20: Utility functions ===
-function toDateStr(d){return d.toISOString().slice(0,10);}
+function toDateStr(d){var y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return y+'-'+m+'-'+day;}
 function capitalize(s){return s.charAt(0).toUpperCase()+s.slice(1);}
 function esc(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
