@@ -379,11 +379,25 @@ body {
 .overlay {
   position: fixed; inset: 0; z-index: 100;
   background: rgba(28,28,28,0.4);
-  display: flex; align-items: flex-end; justify-content: center;
+  display: none; align-items: flex-end; justify-content: center;
   animation: fadeIn 0.15s ease;
 }
-.overlay.hidden { display: none; }
+.overlay.visible { display: flex; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Picker overlay (swap items) — hidden by default */
+.picker-overlay {
+  display: none; position: fixed; inset: 0; z-index: 250;
+}
+.picker-overlay.visible { display: flex; flex-direction: column; }
+
+/* Archive overlay — hidden by default */
+.archive-overlay {
+  display: none; position: fixed; inset: 0; z-index: 300;
+  background: var(--bg); overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 20px 16px; max-width: 430px; margin: 0 auto;
+}
+.archive-overlay.visible { display: block; }
 
 .overlay-panel {
   background: var(--bg);
