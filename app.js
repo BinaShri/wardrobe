@@ -445,9 +445,25 @@ function saveNewItem(){
   var item={wid:wid,name:name,brand:document.getElementById('addBrand').value.trim(),
     color:document.getElementById('addColor').value.trim(),size:document.getElementById('addSize').value.trim(),
     type:type,use:use,season:season,rating:rating,ironNeeded:iron,photoUrl:'',emoji:getEmojiForType(type)};
-  state.wardrobe.push(item);
-  if(!state.isDemo&&state.accessToken){var rs=rating?rating+' '+'\u2605'.repeat(rating)+'\u2606'.repeat(5-rating):'';
-    appendSheetRow([wid,name,item.brand,item.color,item.size,type,use,season,rs,new Date().toLocaleDateString('en-US',{month:'short',year:'numeric'}),'','']);}  closeAddItem();renderClosetGrid();
+
+  // Upload photo to Google Photos if one was taken, then save to sheet
+  var photoPromise = (addItemPhotoData && !state.isDemo && state.accessToken)
+    ? uploadToGooglePhotos(addItemPhotoData)
+    : Promise.resolve(null);
+
+  photoPromise.then(function(url) {
+    if (url) {
+      item.photoUrl = url;
+      document.getElementById('addPhotoSaved').classList.add('visible');
+    }
+    state.wardrobe.push(item);
+    if (!state.isDemo && state.accessToken) {
+      var rs = rating ? rating + ' ' + '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating) : '';
+      appendSheetRow([wid, name, item.brand, item.color, item.size, type, use, season, rs,
+        new Date().toLocaleDateString('en-US', {month:'short', year:'numeric'}), '', item.photoUrl]);
+    }
+    closeAddItem(); renderClosetGrid();
+  });
 }
 
 // === SECTION 16: Item Detail overlay ===
@@ -484,7 +500,16 @@ function saveDetailChanges(){
   item.type=getSelectedChip('detailTypeChips')||item.type;item.use=getSelectedChips('detailUseChips').join(', ');
   item.season=getSelectedChip('detailSeasonChips')||item.season;item.ironNeeded=document.getElementById('detailIronToggle').classList.contains('on');
   item.rating=getStarRating('detailStarRating');item.emoji=getEmojiForType(item.type);
-  updateItemInSheet(item);closeDetailPanel();renderClosetGrid();
+
+  // Upload new photo if one was chosen, then save to sheet
+  var photoPromise = (detailPhotoData && !state.isDemo && state.accessToken)
+    ? uploadToGooglePhotos(detailPhotoData)
+    : Promise.resolve(null);
+
+  photoPromise.then(function(url) {
+    if (url) item.photoUrl = url;
+    updateItemInSheet(item);closeDetailPanel();renderClosetGrid();
+  });
 }
 function removeItem(){if(!confirm('Remove this item from your wardrobe?'))return;var wid=state.detailItemWid;
   state.wardrobe=state.wardrobe.filter(function(i){return i.wid!==wid;});
