@@ -12,4 +12,10 @@ const CONFIG = {
   PHOTOS_ALBUM_ID: 'AF1QipMmaK_QDjnXTExuG2z-Gd4eknHiPNw6hNK5KQyx',
   SHEET_NAME: 'Wardrobe',
   ARCHIVE_SHEET_NAME: 'Outfit Archive',
+  SCOPES: [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/photoslibrary.appendonly',
+    'https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata',
+    'https://www.googleapis.com/auth/calendar.readonly'
+  ].join(' ')
 };
