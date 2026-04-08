@@ -152,14 +152,14 @@ function loadCalendarEvents() {
 // === SECTION 8: Google Sheets ===
 function loadWardrobeFromSheet() {
   if(state.isDemo||!state.accessToken) return;
-  var range=CONFIG.SHEET_NAME+'!A2:M';
+  var range=CONFIG.SHEET_NAME+'!A2:L';
   fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+'/values/'+encodeURIComponent(range),
     {headers:{Authorization:'Bearer '+state.accessToken}})
   .then(function(r){return r.json();}).then(function(data){
     state.wardrobe=(data.values||[]).map(function(row){
       return {wid:row[0]||'',name:row[1]||'',brand:row[2]||'',color:row[3]||'',size:row[4]||'',
         type:row[5]||'Top',use:row[6]||'',season:row[7]||'Year-round',rating:parseRating(row[8]),
-        ironNeeded:(row[11]||'').toLowerCase()==='true',photoUrl:row[12]||'',emoji:getEmojiForType(row[5]||'Top')};
+        ironNeeded:false,photoUrl:row[11]||'',emoji:getEmojiForType(row[5]||'Top')};
     }).filter(function(i){return i.wid;});
     renderClosetGrid(); renderTodayScreen();
   }).catch(function(e){console.error('Sheet:',e);});
@@ -175,7 +175,7 @@ function updateSheetCell(row,col,val){
     {method:'PUT',headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[val]]})});
 }
 function appendSheetRow(vals){
-  return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+'/values/'+encodeURIComponent(CONFIG.SHEET_NAME+'!A:M')+':append?valueInputOption=RAW',
+  return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+'/values/'+encodeURIComponent(CONFIG.SHEET_NAME+'!A:L')+':append?valueInputOption=RAW',
     {method:'POST',headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[vals]})});
 }
 function deleteSheetRow(rn){
@@ -195,9 +195,9 @@ function updateItemInSheet(item){
     fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+'/values/'+encodeURIComponent(CONFIG.SHEET_NAME+'!A'+row+':I'+row)+'?valueInputOption=RAW',
       {method:'PUT',headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
        body:JSON.stringify({values:[[item.wid,item.name,item.brand,item.color,item.size,item.type,item.use,item.season,rs]]})});
-    fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+'/values/'+encodeURIComponent(CONFIG.SHEET_NAME+'!L'+row+':M'+row)+'?valueInputOption=RAW',
+    fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+'/values/'+encodeURIComponent(CONFIG.SHEET_NAME+'!L'+row)+'?valueInputOption=RAW',
       {method:'PUT',headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
-       body:JSON.stringify({values:[[item.ironNeeded?'true':'false',item.photoUrl]]})});
+       body:JSON.stringify({values:[[item.photoUrl]]})});
   });
 }
 function loadArchiveFromSheet(){
@@ -447,8 +447,7 @@ function saveNewItem(){
     type:type,use:use,season:season,rating:rating,ironNeeded:iron,photoUrl:'',emoji:getEmojiForType(type)};
   state.wardrobe.push(item);
   if(!state.isDemo&&state.accessToken){var rs=rating?rating+' '+'\u2605'.repeat(rating)+'\u2606'.repeat(5-rating):'';
-    appendSheetRow([wid,name,item.brand,item.color,item.size,type,use,season,rs,new Date().toLocaleDateString('en-US',{month:'short',year:'numeric'}),'',iron?'true':'false','']);}
-  closeAddItem();renderClosetGrid();
+    appendSheetRow([wid,name,item.brand,item.color,item.size,type,use,season,rs,new Date().toLocaleDateString('en-US',{month:'short',year:'numeric'}),'','']);}  closeAddItem();renderClosetGrid();
 }
 
 // === SECTION 16: Item Detail overlay ===
