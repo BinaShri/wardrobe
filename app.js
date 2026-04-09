@@ -559,16 +559,100 @@ function wireUpAddItem(){
   document.getElementById('addIronToggle').addEventListener('click',function(){this.classList.toggle('on');});
   wireUpStarRating('addStarRating');
   document.getElementById('addSave').addEventListener('click',saveNewItem);
+  // URL import button
+  document.getElementById('btnImport').addEventListener('click',importFromUrl);
 }
-function openAddItem(){addItemPhotoData=null;
+function openAddItem(){addItemPhotoData=null;addItemImportedImageUrl=null;
   document.getElementById('addCamera').innerHTML='<span class="camera-icon">\uD83D\uDCF7</span><span class="camera-text">Tap to take or choose a photo</span>';
   document.getElementById('addPhotoSaved').classList.remove('visible');
-  ['addName','addBrand','addColor','addSize'].forEach(function(id){document.getElementById(id).value='';});
+  ['addName','addBrand','addColor','addSize','addUrl'].forEach(function(id){document.getElementById(id).value='';});
+  var status=document.getElementById('importStatus');status.className='import-status';status.textContent='';
   resetChips('addTypeChips');resetChips('addUseChips');resetChips('addSeasonChips','Year-round');
   document.getElementById('addIronToggle').classList.remove('on');resetStarRating('addStarRating');
   document.getElementById('addPhotoInput').value='';document.getElementById('addItemOverlay').classList.add('visible');
 }
 function closeAddItem(){document.getElementById('addItemOverlay').classList.remove('visible');}
+
+// Import product details from a URL using the Anthropic API
+function importFromUrl() {
+  var url = document.getElementById('addUrl').value.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+
+  var status = document.getElementById('importStatus');
+  var btn = document.getElementById('btnImport');
+  status.className = 'import-status loading';
+  status.textContent = 'Importing product details\u2026';
+  btn.disabled = true;
+  btn.textContent = '\u23F3';
+
+  var prompt = 'Fetch this product URL and extract the following as JSON only, no other text:\n' +
+    '{ "name": "", "brand": "", "color": "", "size": "", "type": "Top|Bottom|Outerwear|Shoes|Accessory", ' +
+    '"use": "Work|Casual|Formal|Active|Funky (comma-separated if multiple)", ' +
+    '"season": "Year-round|Warm|Cool|Cold", "imageUrl": "" }\n\n' +
+    'URL: ' + url + '\n\n' +
+    'For imageUrl, return the main product image URL. For type and use, use the exact values listed. ' +
+    'If you can\'t determine a field, leave it as an empty string.';
+
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      messages: [{ role: 'user', content: prompt }]
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    // Extract the text response from content blocks
+    var text = '';
+    (data.content || []).forEach(function(block) {
+      if (block.type === 'text') text += block.text;
+    });
+
+    // Parse JSON from the response — strip markdown fences if present
+    text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    var product = JSON.parse(text);
+
+    // Pre-fill the form fields
+    if (product.name) document.getElementById('addName').value = product.name;
+    if (product.brand) document.getElementById('addBrand').value = product.brand;
+    if (product.color) document.getElementById('addColor').value = product.color;
+    if (product.size) document.getElementById('addSize').value = product.size;
+
+    // Select the right chips
+    if (product.type) selectChip('addTypeChips', product.type);
+    if (product.use) {
+      var useTags = product.use.split(',').map(function(s) { return s.trim(); });
+      selectMultiChips('addUseChips', useTags);
+    }
+    if (product.season) selectChip('addSeasonChips', product.season);
+
+    // Show product image in the camera area if we got one
+    if (product.imageUrl) {
+      document.getElementById('addCamera').innerHTML = '<img src="' + esc(product.imageUrl) + '" alt="Product photo">';
+      // Store the URL so saveNewItem writes it to the sheet directly
+      // (no Google Photos upload needed for imported images)
+      addItemImportedImageUrl = product.imageUrl;
+    }
+
+    status.className = 'import-status success';
+    status.textContent = 'Details imported \u2014 review and save';
+  })
+  .catch(function(e) {
+    console.warn('Import failed:', e);
+    status.className = 'import-status error';
+    status.textContent = 'Couldn\u2019t read that page \u2014 fill in manually';
+  })
+  .finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Import';
+  });
+}
+// Holds the imported image URL (not base64, so skip Google Photos upload)
+var addItemImportedImageUrl = null;
 function saveNewItem(){
   var name=document.getElementById('addName').value.trim();if(!name){alert('Please enter a name.');return;}
   var type=getSelectedChip('addTypeChips')||'Top',use=getSelectedChips('addUseChips').join(', '),
@@ -582,16 +666,24 @@ function saveNewItem(){
   var saveBtn=document.getElementById('addSave');
   saveBtn.textContent='Saving...';saveBtn.disabled=true;
 
-  // Upload photo to Google Photos if one was taken, then save to sheet
-  var photoPromise = (addItemPhotoData && !state.isDemo && state.accessToken)
-    ? uploadToGooglePhotos(addItemPhotoData)
-    : Promise.resolve(null);
+  // If we have an imported image URL, use it directly (no Google Photos upload)
+  // If we have camera photo data, upload to Google Photos
+  // Otherwise, no photo
+  var photoPromise;
+  if (addItemImportedImageUrl) {
+    item.photoUrl = addItemImportedImageUrl;
+    photoPromise = Promise.resolve({sheetValue: addItemImportedImageUrl, displayUrl: addItemImportedImageUrl});
+  } else if (addItemPhotoData && !state.isDemo && state.accessToken) {
+    photoPromise = uploadToGooglePhotos(addItemPhotoData);
+  } else {
+    photoPromise = Promise.resolve(null);
+  }
 
   photoPromise.then(function(result) {
     var sheetPhotoVal = '';
     if (result) {
-      item.photoUrl = result.displayUrl || '';
-      sheetPhotoVal = result.sheetValue || '';
+      item.photoUrl = result.displayUrl || item.photoUrl || '';
+      sheetPhotoVal = result.sheetValue || item.photoUrl || '';
       document.getElementById('addPhotoSaved').classList.add('visible');
     }
     state.wardrobe.push(item);
