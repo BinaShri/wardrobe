@@ -573,9 +573,11 @@ function openAddItem(){addItemPhotoData=null;addItemImportedImageUrl=null;
 }
 function closeAddItem(){document.getElementById('addItemOverlay').classList.remove('visible');}
 
-// Import product details by fetching the page HTML via a CORS proxy
-// and parsing Open Graph meta tags, JSON-LD, or other structured data.
-// No API key needed — works entirely client-side.
+// Import product details from a URL.
+// Strategy: Always extract what we can from the URL itself (slug, params),
+// then try a CORS proxy for extra data (og tags, JSON-LD).
+// Many SPA sites (Nordstrom, Zappos) won't return data via proxy,
+// but the URL parsing still gives us a good start.
 function importFromUrl() {
   var url = document.getElementById('addUrl').value.trim();
   if (!url) return;
@@ -588,30 +590,97 @@ function importFromUrl() {
   btn.disabled = true;
   btn.textContent = '\u23F3';
 
-  // Try multiple CORS proxies in case one is down
+  // Step 1: Parse the URL itself for product info (always works)
+  var product = parseProductFromUrl(url);
+
+  // Step 2: Try CORS proxy for richer data (og tags, JSON-LD)
   var proxies = [
     'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
-    'https://corsproxy.io/?' + encodeURIComponent(url),
-    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)
+    'https://corsproxy.io/?' + encodeURIComponent(url)
   ];
 
   tryFetchWithProxies(proxies, 0).then(function(html) {
-    if (!html) throw new Error('All proxies failed');
-    var product = parseProductFromHtml(html, url);
+    if (html) {
+      var parsed = parseProductFromHtml(html, url);
+      // Merge: HTML-parsed data fills in gaps from URL parsing
+      if (parsed.name && parsed.name.length > product.name.length) product.name = parsed.name;
+      if (parsed.brand && !product.brand) product.brand = parsed.brand;
+      if (parsed.color && !product.color) product.color = parsed.color;
+      if (parsed.imageUrl) product.imageUrl = parsed.imageUrl;
+      if (parsed.type) product.type = parsed.type;
+    }
+  }).catch(function(){}).finally(function() {
+    // Fill the form with whatever we found
     fillFormFromProduct(product);
-    status.className = 'import-status success';
-    status.textContent = 'Details imported \u2014 review and save';
-  }).catch(function(e) {
-    console.warn('Import failed:', e);
-    status.className = 'import-status error';
-    status.textContent = 'Couldn\u2019t read that page \u2014 fill in manually';
-  }).finally(function() {
+    if (product.name) {
+      status.className = 'import-status success';
+      status.textContent = 'Details imported \u2014 review and save';
+    } else {
+      status.className = 'import-status error';
+      status.textContent = 'Couldn\u2019t read that page \u2014 fill in manually';
+    }
     btn.disabled = false;
     btn.textContent = 'Import';
   });
 }
 
-// Try each CORS proxy until one works
+// Extract product info from the URL itself — works for any site
+// since retailer URLs usually contain the product name in the slug
+function parseProductFromUrl(url) {
+  var product = { name:'', brand:'', color:'', size:'', type:'', use:'Casual', season:'Year-round', imageUrl:'' };
+  try {
+    var u = new URL(url);
+    var host = u.hostname.replace('www.','').split('.')[0]; // nordstrom, anntaylor, etc.
+
+    // Extract product name from URL path slug
+    // Most retailers: /product-name-here/id or /s/product-name-here
+    var path = u.pathname;
+    var slugMatch = path.match(/\/([a-z0-9-]+(?:-[a-z0-9]+){2,})/i); // find longest hyphenated segment
+    if (slugMatch) {
+      var slug = slugMatch[1];
+      // Clean up: remove trailing IDs, SKUs
+      slug = slug.replace(/-\d{5,}$/, '').replace(/-[a-f0-9]{8,}$/, '');
+      // Convert hyphens to spaces and title-case
+      product.name = slug.split('-').map(function(w){
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      }).join(' ');
+    }
+
+    // Extract brand from hostname for known retailers
+    var brandMap = {
+      'nordstrom':'Nordstrom','anntaylor':'Ann Taylor','jcrew':'J.Crew','zappos':'Zappos',
+      'lululemon':'lululemon','gap':'Gap','bananarepublic':'Banana Republic','hm':'H&M',
+      'target':'Target','amazon':'Amazon','macys':'Macy\'s','bloomingdales':'Bloomingdale\'s',
+      'uniqlo':'Uniqlo','zara':'Zara','asos':'ASOS','everlane':'Everlane',
+      'madewell':'Madewell','anthropologie':'Anthropologie','freepeople':'Free People',
+      'spanx':'Spanx','trotters':'Trotters','clarks':'Clarks','ecco':'ECCO','dansko':'Dansko',
+      'pikolinos':'Pikolinos','taos':'Taos','orthofeet':'Orthofeet','smartwool':'Smartwool'
+    };
+    // Check if the brand IS the retailer, or if the brand is in the URL
+    if (brandMap[host]) product.brand = brandMap[host];
+
+    // For Nordstrom/Zappos/Amazon, the brand name is often part of the slug
+    // e.g., /nordstrom-metallic-lightweight-wrap → brand: Nordstrom, name: Metallic Lightweight Wrap
+    if (product.name && product.brand && product.name.toLowerCase().indexOf(product.brand.toLowerCase()) === 0) {
+      product.name = product.name.substring(product.brand.length).trim();
+    }
+
+    // Extract color from URL params
+    var params = u.searchParams;
+    var colorParam = params.get('color') || params.get('COLOR') || params.get('dwvar_color') || '';
+    if (colorParam && !/^\d+$/.test(colorParam)) {
+      product.color = colorParam.split('-').map(function(w){return w.charAt(0).toUpperCase()+w.slice(1);}).join(' ');
+    }
+    var sizeParam = params.get('size') || params.get('SIZE') || '';
+    if (sizeParam) product.size = decodeURIComponent(sizeParam);
+
+    // Guess type from product name
+    if (product.name) product.type = guessType(product.name + ' ' + path);
+
+  } catch(e) { console.warn('URL parse:', e); }
+  return product;
+}
+
 function tryFetchWithProxies(proxies, idx) {
   if (idx >= proxies.length) return Promise.resolve(null);
   return fetch(proxies[idx]).then(function(r) {
@@ -624,17 +693,15 @@ function tryFetchWithProxies(proxies, idx) {
   });
 }
 
-// Parse product data from HTML using Open Graph tags, JSON-LD, and meta tags
 function parseProductFromHtml(html, url) {
   var doc = new DOMParser().parseFromString(html, 'text/html');
   var product = { name:'', brand:'', color:'', size:'', type:'', use:'', season:'', imageUrl:'' };
 
-  // Try JSON-LD first (most structured)
+  // Try JSON-LD first
   var ldScripts = doc.querySelectorAll('script[type="application/ld+json"]');
   for (var i = 0; i < ldScripts.length; i++) {
     try {
       var ld = JSON.parse(ldScripts[i].textContent);
-      // Handle @graph arrays
       if (ld['@graph']) { for (var g = 0; g < ld['@graph'].length; g++) { if (ld['@graph'][g]['@type'] === 'Product') { ld = ld['@graph'][g]; break; } } }
       if (ld['@type'] === 'Product' || ld.name) {
         product.name = ld.name || '';
@@ -651,39 +718,27 @@ function parseProductFromHtml(html, url) {
     var el = doc.querySelector('meta[property="'+prop+'"]') || doc.querySelector('meta[name="'+prop+'"]');
     return el ? el.getAttribute('content') || '' : '';
   }
-  if (!product.name) product.name = ogContent('og:title') || doc.querySelector('title') && doc.querySelector('title').textContent || '';
+  if (!product.name) product.name = ogContent('og:title') || '';
   if (!product.imageUrl) product.imageUrl = ogContent('og:image');
   if (!product.brand) product.brand = ogContent('og:brand') || ogContent('product:brand');
   if (!product.color) product.color = ogContent('product:color');
 
-  // Clean up the name — remove " | Brand" or " - Brand" suffixes
-  if (product.name && product.brand) {
-    product.name = product.name.replace(new RegExp('\\s*[\\|\\-\\u2013\\u2014]\\s*' + product.brand.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '.*$', 'i'), '').trim();
-  }
-  // Remove common suffixes like "| Nordstrom" or "- Zappos"
-  product.name = product.name.replace(/\s*[\|\-\u2013\u2014]\s*(Nordstrom|Zappos|Amazon|Macy's|Bloomingdale's|Target|Lululemon).*$/i, '').trim();
-
-  // Guess type from name and URL
-  if (!product.type) product.type = guessType(product.name + ' ' + url);
-  // Default use and season
-  if (!product.use) product.use = 'Casual';
-  if (!product.season) product.season = 'Year-round';
-
+  // Clean up name
+  product.name = product.name.replace(/\s*[\|\-\u2013\u2014]\s*(Nordstrom|Zappos|Amazon|Macy's|Bloomingdale's|Target|Lululemon|Ann Taylor|J\.Crew).*$/i, '').trim();
+  if (!product.type && product.name) product.type = guessType(product.name + ' ' + url);
   return product;
 }
 
-// Guess clothing type from product name
 function guessType(text) {
   var t = text.toLowerCase();
-  if (/\b(shoe|sneaker|boot|loafer|flat|clog|sandal|heel|mule|slipper|pump)\b/.test(t)) return 'Shoes';
-  if (/\b(pant|trouser|jean|skirt|short|legging|jogger)\b/.test(t)) return 'Bottom';
-  if (/\b(jacket|blazer|coat|cardigan|hoodie|sweater.*jacket|vest|parka|poncho)\b/.test(t)) return 'Outerwear';
-  if (/\b(necklace|bracelet|earring|ring|belt|scarf|hat|bag|watch|sunglasses|sock)\b/.test(t)) return 'Accessory';
+  if (/\b(shoe|sneaker|boot|loafer|flat|clog|sandal|heel|mule|slipper|pump|oxford)\b/.test(t)) return 'Shoes';
+  if (/\b(pant|trouser|jean|skirt|short|legging|jogger|chino)\b/.test(t)) return 'Bottom';
+  if (/\b(jacket|blazer|coat|cardigan|hoodie|sweater.*jacket|vest|parka|poncho|outerwear)\b/.test(t)) return 'Outerwear';
+  if (/\b(necklace|bracelet|earring|ring|belt|scarf|hat|bag|watch|sunglasses|sock|wrap|glove)\b/.test(t)) return 'Accessory';
   if (/\b(top|tee|shirt|blouse|sweater|tank|cami|tunic|pullover|henley|polo|dress)\b/.test(t)) return 'Top';
   return '';
 }
 
-// Fill the Add Item form from parsed product data
 function fillFormFromProduct(product) {
   if (product.name) document.getElementById('addName').value = product.name;
   if (product.brand) document.getElementById('addBrand').value = product.brand;
