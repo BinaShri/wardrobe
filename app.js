@@ -378,7 +378,11 @@ function wireUpVibePicker() {
   });
   document.getElementById('btnLooksGood').addEventListener('click',function(){
     if(!state.todayOutfit)return;
-    saveOutfitToArchive(state.todayOutfit,toDateStr(new Date()),vibeToFormality(state.currentVibe));
+    var today=toDateStr(new Date());
+    var formality=vibeToFormality(state.currentVibe);
+    saveOutfitToArchive(state.todayOutfit,today,formality);
+    // Sync with Plan screen — mark today as approved with this outfit
+    state.planOutfits[today]={outfit:state.todayOutfit,formality:formality,approved:true};
     var btn=document.getElementById('btnLooksGood');btn.textContent='Approved \u2713';
     setTimeout(function(){btn.textContent='Looks good \u2713';},2000);
   });
@@ -391,7 +395,7 @@ function renderOutfitCard(outfit,cid) {
     var item=outfit[s];
     var ph=item.photoUrl?'<img src="'+esc(item.photoUrl)+'" alt="'+esc(item.name)+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="emoji-fallback" style="display:none">'+item.emoji+'</span>'
       :'<span class="emoji-fallback">'+item.emoji+'</span>';
-    return '<div class="outfit-item" data-wid="'+item.wid+'" data-slot="'+s+'"><div class="outfit-item-photo">'+ph+'<button class="swap-btn" title="Swap">\u21BB</button></div><div class="outfit-item-type">'+s+'</div><div class="outfit-item-label">'+esc(item.name)+'</div></div>';
+    return '<div class="outfit-item" data-wid="'+item.wid+'" data-slot="'+s+'"><div class="outfit-item-label">'+esc(item.name)+'</div><div class="outfit-item-photo">'+ph+'<button class="swap-btn" title="Swap">\u21BB</button></div><div class="outfit-item-type">'+s+'</div></div>';
   }).join('');
   c.querySelectorAll('.swap-btn').forEach(function(btn){
     btn.addEventListener('click',function(e){e.stopPropagation();

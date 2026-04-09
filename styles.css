@@ -260,18 +260,20 @@ html, body {
   justify-content: center;
 }
 .outfit-item-label {
-  font-size: 0.75rem;
-  margin-top: 0.3rem;
-  color: #666;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--black);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .outfit-item-type {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   color: #aaa;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  margin-top: 0.2rem;
 }
 
 /* ── Commute note ── */
