@@ -767,35 +767,39 @@ function saveNewItem(){
   var saveBtn=document.getElementById('addSave');
   saveBtn.textContent='Saving...';saveBtn.disabled=true;
 
-  // If we have an imported image URL, use it directly (no Google Photos upload)
-  // If we have camera photo data, upload to Google Photos
-  // Otherwise, no photo
-  var photoPromise;
+  // Determine the photo URL to use
+  var sheetPhotoVal = '';
+
   if (addItemImportedImageUrl) {
+    // Imported from URL — use the product image URL directly
     item.photoUrl = addItemImportedImageUrl;
-    photoPromise = Promise.resolve({sheetValue: addItemImportedImageUrl, displayUrl: addItemImportedImageUrl});
+    sheetPhotoVal = addItemImportedImageUrl;
+    finishSave();
   } else if (addItemPhotoData && !state.isDemo && state.accessToken) {
-    photoPromise = uploadToGooglePhotos(addItemPhotoData);
+    // Camera photo — show immediately with base64, then upload to Google Photos
+    item.photoUrl = 'data:image/jpeg;base64,' + addItemPhotoData;
+    // Try Google Photos upload for permanent storage
+    uploadToGooglePhotos(addItemPhotoData).then(function(result) {
+      if (result) {
+        item.photoUrl = result.displayUrl || item.photoUrl;
+        sheetPhotoVal = result.sheetValue || '';
+      }
+      finishSave();
+    }).catch(function() { finishSave(); });
   } else {
-    photoPromise = Promise.resolve(null);
+    finishSave();
   }
 
-  photoPromise.then(function(result) {
-    var sheetPhotoVal = '';
-    if (result) {
-      item.photoUrl = result.displayUrl || item.photoUrl || '';
-      sheetPhotoVal = result.sheetValue || item.photoUrl || '';
-      document.getElementById('addPhotoSaved').classList.add('visible');
-    }
+  function finishSave() {
     state.wardrobe.push(item);
     if (!state.isDemo && state.accessToken) {
       var rs = rating ? rating + ' ' + '\u2605'.repeat(rating) + '\u2606'.repeat(5 - rating) : '';
       appendSheetRow([wid, name, item.brand, item.color, item.size, type, use, season, rs,
-        new Date().toLocaleDateString('en-US', {month:'short', year:'numeric'}), '', sheetPhotoVal]);
+        new Date().toLocaleDateString('en-US', {month:'short', year:'numeric'}), '', sheetPhotoVal || item.photoUrl]);
     }
     saveBtn.textContent='Save to wardrobe';saveBtn.disabled=false;
     closeAddItem(); renderClosetGrid();
-  });
+  }
 }
 
 // === SECTION 16: Item Detail overlay ===
