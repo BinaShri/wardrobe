@@ -573,7 +573,9 @@ function openAddItem(){addItemPhotoData=null;addItemImportedImageUrl=null;
 }
 function closeAddItem(){document.getElementById('addItemOverlay').classList.remove('visible');}
 
-// Import product details from a URL using the Anthropic API
+// Import product details by fetching the page HTML via a CORS proxy
+// and parsing Open Graph meta tags, JSON-LD, or other structured data.
+// No API key needed — works entirely client-side.
 function importFromUrl() {
   var url = document.getElementById('addUrl').value.trim();
   if (!url) return;
@@ -586,70 +588,114 @@ function importFromUrl() {
   btn.disabled = true;
   btn.textContent = '\u23F3';
 
-  var prompt = 'Fetch this product URL and extract the following as JSON only, no other text:\n' +
-    '{ "name": "", "brand": "", "color": "", "size": "", "type": "Top|Bottom|Outerwear|Shoes|Accessory", ' +
-    '"use": "Work|Casual|Formal|Active|Funky (comma-separated if multiple)", ' +
-    '"season": "Year-round|Warm|Cool|Cold", "imageUrl": "" }\n\n' +
-    'URL: ' + url + '\n\n' +
-    'For imageUrl, return the main product image URL. For type and use, use the exact values listed. ' +
-    'If you can\'t determine a field, leave it as an empty string.';
+  // Try multiple CORS proxies in case one is down
+  var proxies = [
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+    'https://corsproxy.io/?' + encodeURIComponent(url),
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)
+  ];
 
-  fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      messages: [{ role: 'user', content: prompt }]
-    })
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    // Extract the text response from content blocks
-    var text = '';
-    (data.content || []).forEach(function(block) {
-      if (block.type === 'text') text += block.text;
-    });
-
-    // Parse JSON from the response — strip markdown fences if present
-    text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    var product = JSON.parse(text);
-
-    // Pre-fill the form fields
-    if (product.name) document.getElementById('addName').value = product.name;
-    if (product.brand) document.getElementById('addBrand').value = product.brand;
-    if (product.color) document.getElementById('addColor').value = product.color;
-    if (product.size) document.getElementById('addSize').value = product.size;
-
-    // Select the right chips
-    if (product.type) selectChip('addTypeChips', product.type);
-    if (product.use) {
-      var useTags = product.use.split(',').map(function(s) { return s.trim(); });
-      selectMultiChips('addUseChips', useTags);
-    }
-    if (product.season) selectChip('addSeasonChips', product.season);
-
-    // Show product image in the camera area if we got one
-    if (product.imageUrl) {
-      document.getElementById('addCamera').innerHTML = '<img src="' + esc(product.imageUrl) + '" alt="Product photo">';
-      // Store the URL so saveNewItem writes it to the sheet directly
-      // (no Google Photos upload needed for imported images)
-      addItemImportedImageUrl = product.imageUrl;
-    }
-
+  tryFetchWithProxies(proxies, 0).then(function(html) {
+    if (!html) throw new Error('All proxies failed');
+    var product = parseProductFromHtml(html, url);
+    fillFormFromProduct(product);
     status.className = 'import-status success';
     status.textContent = 'Details imported \u2014 review and save';
-  })
-  .catch(function(e) {
+  }).catch(function(e) {
     console.warn('Import failed:', e);
     status.className = 'import-status error';
     status.textContent = 'Couldn\u2019t read that page \u2014 fill in manually';
-  })
-  .finally(function() {
+  }).finally(function() {
     btn.disabled = false;
     btn.textContent = 'Import';
   });
+}
+
+// Try each CORS proxy until one works
+function tryFetchWithProxies(proxies, idx) {
+  if (idx >= proxies.length) return Promise.resolve(null);
+  return fetch(proxies[idx]).then(function(r) {
+    if (!r.ok) throw new Error(r.status);
+    return r.text();
+  }).then(function(html) {
+    return html && html.length > 500 ? html : null;
+  }).catch(function() {
+    return tryFetchWithProxies(proxies, idx + 1);
+  });
+}
+
+// Parse product data from HTML using Open Graph tags, JSON-LD, and meta tags
+function parseProductFromHtml(html, url) {
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  var product = { name:'', brand:'', color:'', size:'', type:'', use:'', season:'', imageUrl:'' };
+
+  // Try JSON-LD first (most structured)
+  var ldScripts = doc.querySelectorAll('script[type="application/ld+json"]');
+  for (var i = 0; i < ldScripts.length; i++) {
+    try {
+      var ld = JSON.parse(ldScripts[i].textContent);
+      // Handle @graph arrays
+      if (ld['@graph']) { for (var g = 0; g < ld['@graph'].length; g++) { if (ld['@graph'][g]['@type'] === 'Product') { ld = ld['@graph'][g]; break; } } }
+      if (ld['@type'] === 'Product' || ld.name) {
+        product.name = ld.name || '';
+        product.brand = (ld.brand && (ld.brand.name || ld.brand)) || '';
+        product.color = ld.color || '';
+        if (ld.image) product.imageUrl = Array.isArray(ld.image) ? ld.image[0] : (typeof ld.image === 'string' ? ld.image : (ld.image.url || ''));
+        break;
+      }
+    } catch(e) {}
+  }
+
+  // Fill gaps from Open Graph meta tags
+  function ogContent(prop) {
+    var el = doc.querySelector('meta[property="'+prop+'"]') || doc.querySelector('meta[name="'+prop+'"]');
+    return el ? el.getAttribute('content') || '' : '';
+  }
+  if (!product.name) product.name = ogContent('og:title') || doc.querySelector('title') && doc.querySelector('title').textContent || '';
+  if (!product.imageUrl) product.imageUrl = ogContent('og:image');
+  if (!product.brand) product.brand = ogContent('og:brand') || ogContent('product:brand');
+  if (!product.color) product.color = ogContent('product:color');
+
+  // Clean up the name — remove " | Brand" or " - Brand" suffixes
+  if (product.name && product.brand) {
+    product.name = product.name.replace(new RegExp('\\s*[\\|\\-\\u2013\\u2014]\\s*' + product.brand.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '.*$', 'i'), '').trim();
+  }
+  // Remove common suffixes like "| Nordstrom" or "- Zappos"
+  product.name = product.name.replace(/\s*[\|\-\u2013\u2014]\s*(Nordstrom|Zappos|Amazon|Macy's|Bloomingdale's|Target|Lululemon).*$/i, '').trim();
+
+  // Guess type from name and URL
+  if (!product.type) product.type = guessType(product.name + ' ' + url);
+  // Default use and season
+  if (!product.use) product.use = 'Casual';
+  if (!product.season) product.season = 'Year-round';
+
+  return product;
+}
+
+// Guess clothing type from product name
+function guessType(text) {
+  var t = text.toLowerCase();
+  if (/\b(shoe|sneaker|boot|loafer|flat|clog|sandal|heel|mule|slipper|pump)\b/.test(t)) return 'Shoes';
+  if (/\b(pant|trouser|jean|skirt|short|legging|jogger)\b/.test(t)) return 'Bottom';
+  if (/\b(jacket|blazer|coat|cardigan|hoodie|sweater.*jacket|vest|parka|poncho)\b/.test(t)) return 'Outerwear';
+  if (/\b(necklace|bracelet|earring|ring|belt|scarf|hat|bag|watch|sunglasses|sock)\b/.test(t)) return 'Accessory';
+  if (/\b(top|tee|shirt|blouse|sweater|tank|cami|tunic|pullover|henley|polo|dress)\b/.test(t)) return 'Top';
+  return '';
+}
+
+// Fill the Add Item form from parsed product data
+function fillFormFromProduct(product) {
+  if (product.name) document.getElementById('addName').value = product.name;
+  if (product.brand) document.getElementById('addBrand').value = product.brand;
+  if (product.color) document.getElementById('addColor').value = product.color;
+  if (product.size) document.getElementById('addSize').value = product.size;
+  if (product.type) selectChip('addTypeChips', product.type);
+  if (product.use) selectMultiChips('addUseChips', product.use.split(',').map(function(s){return s.trim();}));
+  if (product.season) selectChip('addSeasonChips', product.season);
+  if (product.imageUrl) {
+    document.getElementById('addCamera').innerHTML = '<img src="' + esc(product.imageUrl) + '" alt="Product photo">';
+    addItemImportedImageUrl = product.imageUrl;
+  }
 }
 // Holds the imported image URL (not base64, so skip Google Photos upload)
 var addItemImportedImageUrl = null;
