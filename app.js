@@ -140,13 +140,22 @@ function loadCalendarEvents() {
   if(state.isDemo||!state.accessToken) return;
   var now=new Date(),mon=new Date(now);mon.setDate(now.getDate()-((now.getDay()+6)%7));mon.setHours(0,0,0,0);
   var sun=new Date(mon);sun.setDate(mon.getDate()+6);sun.setHours(23,59,59,999);
-  fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin='+mon.toISOString()+'&timeMax='+sun.toISOString()+'&singleEvents=true&orderBy=startTime&maxResults=50',
-    {headers:{Authorization:'Bearer '+state.accessToken}})
-  .then(function(r){return r.json();}).then(function(data){
-    state.calendarEvents={};
-    (data.items||[]).forEach(function(ev){var s=ev.start.dateTime||ev.start.date,d=s.slice(0,10);
-      if(!state.calendarEvents[d])state.calendarEvents[d]=[];state.calendarEvents[d].push(ev.summary||'Event');});
-  }).catch(function(e){console.warn('Cal:',e);});
+  var timeParams='?timeMin='+mon.toISOString()+'&timeMax='+sun.toISOString()+'&singleEvents=true&orderBy=startTime&maxResults=50';
+  // Pull from both Bina's primary calendar and the Bina & Sandeep shared calendar
+  var calIds=['primary','8hebqgfaeab317ef1rqa6oiu30@group.calendar.google.com'];
+  state.calendarEvents={};
+  calIds.forEach(function(calId){
+    fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calId)+'/events'+timeParams,
+      {headers:{Authorization:'Bearer '+state.accessToken}})
+    .then(function(r){return r.json();}).then(function(data){
+      (data.items||[]).forEach(function(ev){var s=ev.start.dateTime||ev.start.date,d=s.slice(0,10);
+        if(!state.calendarEvents[d])state.calendarEvents[d]=[];
+        var title=ev.summary||'Event';
+        // Avoid duplicate event names on the same day
+        if(state.calendarEvents[d].indexOf(title)<0) state.calendarEvents[d].push(title);
+      });
+    }).catch(function(e){console.warn('Cal ('+calId+'):',e);});
+  });
 }
 
 // === SECTION 8: Google Sheets ===
