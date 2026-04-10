@@ -417,6 +417,21 @@ html, body {
   cursor: pointer;
 }
 
+/* Weekend section */
+.weekend-header {
+  display: flex; align-items: center; gap: 0.6rem;
+  margin: 1.2rem 0 0.6rem; padding-top: 0.8rem;
+  border-top: 1px dashed var(--border);
+}
+.weekend-header span {
+  font-family: var(--font-display); font-style: italic;
+  font-size: 1rem; color: var(--gold);
+}
+.day-card.weekend {
+  background: #FDFCFA;
+  border-style: dashed;
+}
+
 /* ── Closet screen ── */
 .closet-filters {
   display: flex; gap: 0.4rem;

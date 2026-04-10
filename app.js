@@ -391,29 +391,59 @@ function renderOutfitCard(outfit,cid) {
   var c=document.getElementById(cid);
   if(!outfit){c.innerHTML='<p style="color:#999;padding:1rem;">Add more items to get outfit suggestions.</p>';return;}
   var slots=['top','bottom','shoes','outerwear'];
-  c.innerHTML=slots.filter(function(s){return outfit[s];}).map(function(s){
+  // Render main slots
+  var html=slots.filter(function(s){return outfit[s];}).map(function(s){
     var item=outfit[s];
     var ph=item.photoUrl?'<img src="'+esc(item.photoUrl)+'" alt="'+esc(item.name)+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="emoji-fallback" style="display:none">'+item.emoji+'</span>'
       :'<span class="emoji-fallback">'+item.emoji+'</span>';
     return '<div class="outfit-item" data-wid="'+item.wid+'" data-slot="'+s+'"><div class="outfit-item-label">'+esc(item.name)+'</div><div class="outfit-item-photo">'+ph+'<button class="swap-btn" title="Swap">\u21BB</button></div><div class="outfit-item-type">'+s+'</div></div>';
   }).join('');
-  c.querySelectorAll('.swap-btn').forEach(function(btn){
+  // Render extras (accessories, scarves, etc.)
+  if(outfit.extras&&outfit.extras.length){
+    html+=outfit.extras.map(function(item,idx){
+      var ph=item.photoUrl?'<img src="'+esc(item.photoUrl)+'" alt="'+esc(item.name)+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="emoji-fallback" style="display:none">'+item.emoji+'</span>'
+        :'<span class="emoji-fallback">'+item.emoji+'</span>';
+      return '<div class="outfit-item" data-extra-idx="'+idx+'"><div class="outfit-item-label">'+esc(item.name)+'</div><div class="outfit-item-photo">'+ph+'<button class="swap-btn extra-remove" title="Remove">\u2715</button></div><div class="outfit-item-type">'+item.type+'</div></div>';
+    }).join('');
+  }
+  // Add item button
+  html+='<div class="outfit-item outfit-add-btn"><div class="outfit-item-label">&nbsp;</div><div class="outfit-item-photo" style="border-style:dashed;cursor:pointer;"><span class="emoji-fallback" style="font-size:1.4rem;color:var(--gold);">+</span></div><div class="outfit-item-type">add</div></div>';
+  c.innerHTML=html;
+
+  // Wire swap buttons for main slots
+  c.querySelectorAll('.swap-btn:not(.extra-remove)').forEach(function(btn){
     btn.addEventListener('click',function(e){e.stopPropagation();
       var el=btn.closest('.outfit-item'),sl=el.dataset.slot;
       var tm={top:'Top',bottom:'Bottom',shoes:'Shoes',outerwear:'Outerwear'};
       openPicker(tm[sl],el.dataset.wid,function(ni){outfit[sl]=ni;renderOutfitCard(outfit,cid);renderCommuteNote();});
     });
   });
+  // Wire remove buttons for extras
+  c.querySelectorAll('.extra-remove').forEach(function(btn){
+    btn.addEventListener('click',function(e){e.stopPropagation();
+      var idx=parseInt(btn.closest('.outfit-item').dataset.extraIdx);
+      outfit.extras.splice(idx,1);
+      renderOutfitCard(outfit,cid);
+    });
+  });
+  // Wire the add button — opens picker for any type
+  var addBtn=c.querySelector('.outfit-add-btn');
+  if(addBtn){addBtn.addEventListener('click',function(){
+    openPickerAnyType(outfit,function(item){
+      if(!outfit.extras) outfit.extras=[];
+      outfit.extras.push(item);
+      renderOutfitCard(outfit,cid);
+    });
+  });}
 }
 
 // === SECTION 11: Outfit logic ===
 function generateOutfit(vibe,dateStr) {
-  var temp=getTempForDate(dateStr),wc=state.weather?state.weather.code:0;
-  var needsOW=temp<65||isRainy(wc),tags=vibeToUseTags(vibe);
+  var temp=getTempForDate(dateStr),tags=vibeToUseTags(vibe);
   var top=pickItem('Top',tags,temp),bot=pickItem('Bottom',tags,temp),shoes=pickItem('Shoes',tags,temp);
-  var ow=needsOW?pickItem('Outerwear',tags,temp):null;
+  var ow=pickItem('Outerwear',tags,temp);
   if(!top&&!bot&&!shoes) return null;
-  return {top:top,bottom:bot,shoes:shoes,outerwear:ow};
+  return {top:top,bottom:bot,shoes:shoes,outerwear:ow,extras:[]};
 }
 function vibeToUseTags(v){return{work:['Work'],casual:['Casual'],funky:['Funky','Casual'],formal:['Formal','Work']}[v]||['Work'];}
 function vibeToFormality(v){return{work:3,casual:2,funky:2,formal:4}[v]||3;}
@@ -457,14 +487,24 @@ function renderCommuteNote(temp,wc,formality,cid) {
 function wireUpPlan(){document.getElementById('btnApproveAll').addEventListener('click',approveAllOutfits);}
 function renderPlanScreen() {
   var cont=document.getElementById('planDays'),days=getWeekDays();cont.innerHTML='';
+  var addedWeekendHeader=false;
   days.forEach(function(day){
-    if(!state.planOutfits[day.dateStr]) state.planOutfits[day.dateStr]={outfit:generateOutfit('work',day.dateStr),formality:3,approved:false};
+    // Add Weekend header before Saturday
+    if(day.isWeekend&&!addedWeekendHeader){
+      var hdr=document.createElement('div');
+      hdr.className='weekend-header';
+      hdr.innerHTML='<span>Weekend</span>';
+      cont.appendChild(hdr);
+      addedWeekendHeader=true;
+    }
+    var defaultVibe=day.isWeekend?'casual':'work';
+    if(!state.planOutfits[day.dateStr]) state.planOutfits[day.dateStr]={outfit:generateOutfit(defaultVibe,day.dateStr),formality:day.isWeekend?1:3,approved:false};
     var plan=state.planOutfits[day.dateStr];
     var fc=state.weather&&state.weather.forecast?state.weather.forecast.find(function(f){return f.date===day.dateStr;}):null;
     var events=state.calendarEvents[day.dateStr]||[];
     var rain=fc?fc.rainChance>30:false;
     var card=document.createElement('div');
-    card.className='day-card'+(plan.approved?' approved':'');card.dataset.date=day.dateStr;
+    card.className='day-card'+(plan.approved?' approved':'')+(day.isWeekend?' weekend':'');card.dataset.date=day.dateStr;
     var tags=events.map(function(ev){return '<span class="tag tag-event">'+esc(ev)+'</span>';}).join('');
     if(rain) tags+='<span class="tag tag-rain">\uD83C\uDF27 Rain likely</span>';
     if(plan.approved) tags+='<span class="tag tag-approved">\u2713 Approved</span>';
@@ -515,7 +555,7 @@ function renderPlanScreen() {
 function approveAllOutfits(){getWeekDays().forEach(function(d){var p=state.planOutfits[d.dateStr];if(p&&!p.approved&&p.outfit){p.approved=true;saveOutfitToArchive(p.outfit,d.dateStr,p.formality);}});renderPlanScreen();}
 function hasIronNeeded(o){return['top','bottom','shoes','outerwear'].some(function(s){return o[s]&&o[s].ironNeeded;});}
 function getWeekDays(){var now=new Date(),mon=new Date(now);mon.setDate(now.getDate()-((now.getDay()+6)%7));var days=[];
-  for(var i=0;i<5;i++){var d=new Date(mon);d.setDate(mon.getDate()+i);days.push({date:d,dateStr:toDateStr(d),dayName:d.toLocaleDateString('en-US',{weekday:'long'}),monthDay:d.toLocaleDateString('en-US',{month:'short',day:'numeric'})});}return days;}
+  for(var i=0;i<7;i++){var d=new Date(mon);d.setDate(mon.getDate()+i);days.push({date:d,dateStr:toDateStr(d),dayName:d.toLocaleDateString('en-US',{weekday:'long'}),monthDay:d.toLocaleDateString('en-US',{month:'short',day:'numeric'}),isWeekend:i>=5});}return days;}
 
 // === SECTION 14: Closet screen ===
 function wireUpCloset(){
@@ -874,6 +914,26 @@ function openPicker(type,excludeWid,callback){
   document.getElementById('pickerOverlay').classList.add('visible');
 }
 function closePicker(){document.getElementById('pickerOverlay').classList.remove('visible');state.pickerCallback=null;}
+
+// Open picker showing all items (for adding extras like accessories, scarves)
+function openPickerAnyType(outfit,callback){
+  state.pickerCallback=callback;
+  // Exclude items already in the outfit
+  var usedWids=[];
+  ['top','bottom','shoes','outerwear'].forEach(function(s){if(outfit[s])usedWids.push(outfit[s].wid);});
+  if(outfit.extras) outfit.extras.forEach(function(i){usedWids.push(i.wid);});
+  var items=state.wardrobe.filter(function(i){return usedWids.indexOf(i.wid)<0;});
+  document.getElementById('pickerTitle').textContent='Add an item';
+  var grid=document.getElementById('pickerGrid');
+  grid.innerHTML=items.map(function(item){
+    var ph=item.photoUrl?'<img src="'+esc(item.photoUrl)+'" alt="'+esc(item.name)+'" onerror="this.outerHTML=\''+item.emoji+'\'">':item.emoji;
+    return '<div class="picker-item" data-wid="'+item.wid+'"><div class="picker-item-photo">'+ph+'</div><div class="picker-item-name">'+esc(item.name)+'</div></div>';
+  }).join('');
+  grid.querySelectorAll('.picker-item').forEach(function(el){el.addEventListener('click',function(){
+    var picked=state.wardrobe.find(function(i){return i.wid===el.dataset.wid;});
+    if(picked&&state.pickerCallback) state.pickerCallback(picked);closePicker();});});
+  document.getElementById('pickerOverlay').classList.add('visible');
+}
 
 // === SECTION 18: Outfit Archive ===
 function wireUpArchive(){document.getElementById('btnHistory').addEventListener('click',openArchive);document.getElementById('archiveClose').addEventListener('click',closeArchive);}
