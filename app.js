@@ -187,10 +187,31 @@ function appendSheetRow(vals){
   return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+'/values/'+encodeURIComponent(CONFIG.SHEET_NAME+'!A:L')+':append?valueInputOption=RAW',
     {method:'POST',headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[vals]})});
 }
+// Cache the Wardrobe tab's sheetId (it's NOT always 0)
+var wardrobeSheetId = null;
+function getWardrobeSheetId() {
+  if (wardrobeSheetId !== null) return Promise.resolve(wardrobeSheetId);
+  return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + CONFIG.SPREADSHEET_ID,
+    {headers:{Authorization:'Bearer '+state.accessToken}})
+  .then(function(r){return r.json();})
+  .then(function(d) {
+    var sheets = d.sheets || [];
+    for (var i = 0; i < sheets.length; i++) {
+      if (sheets[i].properties.title === CONFIG.SHEET_NAME) {
+        wardrobeSheetId = sheets[i].properties.sheetId;
+        return wardrobeSheetId;
+      }
+    }
+    return 0; // fallback
+  });
+}
+
 function deleteSheetRow(rn){
-  return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+':batchUpdate',
-    {method:'POST',headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
-     body:JSON.stringify({requests:[{deleteDimension:{range:{sheetId:0,dimension:'ROWS',startIndex:rn-1,endIndex:rn}}}]})});
+  return getWardrobeSheetId().then(function(sid) {
+    return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+CONFIG.SPREADSHEET_ID+':batchUpdate',
+      {method:'POST',headers:{Authorization:'Bearer '+state.accessToken,'Content-Type':'application/json'},
+       body:JSON.stringify({requests:[{deleteDimension:{range:{sheetId:sid,dimension:'ROWS',startIndex:rn-1,endIndex:rn}}}]})});
+  });
 }
 function saveRatingToSheet(wid,rating){
   if(state.isDemo||!state.accessToken)return;
